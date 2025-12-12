@@ -206,10 +206,23 @@ const StopReasonCategories = ({ selectedCategory, setSelectedCategory, handleSto
     setSelectedCategory(selectedCategory === categoryKey ? null : categoryKey);
   };
 
+  // Mobil kontrolü
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+
   return (
     <div 
       ref={scrollRef}
-      style={{ 
+      className={selectedCategory ? 'category-selected' : 'category-not-selected'}
+      style={isMobile ? {
+        // Mobilde inline style'ları kaldır, CSS kontrol etsin
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.75rem',
+        height: '100%',
+        maxHeight: '100%',
+        overflow: 'hidden'
+      } : {
+        // PC'de grid layout
         display: 'grid', 
         gridTemplateColumns: '320px 1fr',
         gap: '1rem',
@@ -227,7 +240,14 @@ const StopReasonCategories = ({ selectedCategory, setSelectedCategory, handleSto
       onMouseLeave={handleEnd}
     >
       {/* Sol kolon: Kategori listesi */}
-      <div style={{
+      <div style={isMobile ? {
+        // Mobilde CSS kontrol etsin
+        backgroundColor: 'rgba(51, 65, 85, 0.3)',
+        border: '1px solid rgba(148,163,184,0.2)',
+        borderRadius: '10px',
+        padding: '0.5rem'
+      } : {
+        // PC'de normal
         backgroundColor: 'rgba(51, 65, 85, 0.3)',
         border: '1px solid rgba(148,163,184,0.2)',
         borderRadius: '14px',
@@ -272,7 +292,14 @@ const StopReasonCategories = ({ selectedCategory, setSelectedCategory, handleSto
             </div>
             
       {/* Sağ kolon: Seçilen kategorinin sebepleri */}
-            <div style={{
+            <div style={isMobile ? {
+        // Mobilde CSS kontrol etsin
+        backgroundColor: 'rgba(51, 65, 85, 0.3)',
+        border: '1px solid rgba(148,163,184,0.2)',
+        borderRadius: '10px',
+        padding: '0.5rem'
+      } : {
+        // PC'de normal
         backgroundColor: 'rgba(51, 65, 85, 0.3)',
         border: '1px solid rgba(148,163,184,0.2)',
         borderRadius: '14px',

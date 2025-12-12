@@ -62,7 +62,6 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
   const [showMaintenanceRequests, setShowMaintenanceRequests] = useState(true); // Varsayılan olarak açık
   const [maintenanceButtonExpanded, setMaintenanceButtonExpanded] = useState(false);
   const maintenanceButtonTimeoutRef = useRef(null);
-  const [showSharedStoppageHelp, setShowSharedStoppageHelp] = useState(false);
   const hasShownStopReasonModalRef = useRef(false); // Modal bir kere gösterildi mi?
   
   // Notification state
@@ -861,6 +860,68 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
     }
   };
 
+  // Backend'den aktif duruş sebebini oku (farklı cihazlarda görülebilir olması için)
+  useEffect(() => {
+    let isMounted = true;
+    let intervalId = null;
+
+    const fetchCurrentStoppageReason = async () => {
+      try {
+        const { data } = await machineApi.get('/plcdata/current-stoppage-reason');
+        
+        if (!isMounted) return;
+
+        if (data && data.hasReason && data.categoryId > 0 && data.reasonId > 0) {
+          // Kategori ve sebep isimlerini al
+          try {
+            const { data: categories } = await machineApi.get('/stoppagereasons/categories');
+            const category = categories.find(c => c.id === data.categoryId);
+            
+            if (category) {
+              const { data: reasons } = await machineApi.get(`/stoppagereasons/reasons/${category.id}`);
+              const reason = reasons.find(r => r.id === data.reasonId);
+              
+              if (reason) {
+                // State'leri güncelle
+                setSelectedStopCategory(data.categoryId);
+                setSelectedStopReason(reason.reasonName);
+                setSelectedStopReasonId(data.reasonId);
+                setSelectedReason(`${reason.reasonName} (ID: ${data.reasonId})`);
+                console.log(`✅ Backend'den aktif duruş sebebi okundu: ${category.displayName} - ${reason.reasonName}`);
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ Kategori/sebep isimleri alınamadı:', error);
+          }
+        } else {
+          // Aktif duruş sebebi yok, state'leri temizle (sadece backend'den okunan değerler için)
+          // Kullanıcı henüz seçim yapmadıysa temizleme
+          if (data && !data.hasReason) {
+            // Backend'de aktif sebep yok, ama kullanıcı henüz seçim yapmış olabilir
+            // Bu durumda state'leri temizlemeyelim, sadece backend'den okunan değerler için
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Aktif duruş sebebi okunamadı:', error);
+      }
+    };
+
+    // İlk yüklemede oku
+    fetchCurrentStoppageReason();
+
+    // Her 5 saniyede bir kontrol et (makine duruyorsa)
+    if (machineStatus === 'stopped') {
+      intervalId = setInterval(fetchCurrentStoppageReason, 5000);
+    }
+
+    return () => {
+      isMounted = false;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [machineStatus, machineApi]);
+
   // Makine durumu değiştiğinde
   useEffect(() => {
     if (machineStatus === 'stopped' && !stopStartTime && !stopTimer) {
@@ -1083,6 +1144,7 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
     };
   }, [stopTimer]);
 
+
   // İş emri giriş modal'ı açıldığında input'a focus yap
   useEffect(() => {
     if (showOrderInput && orderInputRef.current) {
@@ -1128,9 +1190,11 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
                   
                   <div className="top-bar-right">
           <div className="connection-status">
-            <div className={`connection-dot ${plcConnected ? 'connected' : 'disconnected'}`} />
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.25rem' }}>
-              <span>PLC {plcConnected ? 'Bağlı' : 'Bağlantı Yok'}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div className={`connection-dot ${plcConnected ? 'connected' : 'disconnected'}`} />
+                <span>PLC {plcConnected ? 'Bağlı' : 'Bağlantı Yok'}</span>
+              </div>
               <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
                 {machineName || machineTableName || 'Makine'}
               </span>
@@ -1408,10 +1472,17 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
           <CheckCircle size={18} />
           İş Sonu
         </button>
-        {/* Arıza Bildirimi Butonu - bottomBar içinde, sağda - Framer Motion ile */}
+        {/* Arıza Bildirimi Butonu - bottomBar içinde, sağda - Framer Motion ile (PC) / Direkt tıklama (Mobil) */}
         <motion.button
           className="maintenance-button-minimal"
           onClick={() => {
+            // Mobilde direkt modal aç (window.innerWidth <= 768)
+            if (window.innerWidth <= 768) {
+              setShowMaintenanceModal(true);
+              return;
+            }
+            
+            // PC'de animasyonlu açılma
             if (maintenanceButtonExpanded) {
               // Timeout'u temizle
               if (maintenanceButtonTimeoutRef.current) {
@@ -1493,6 +1564,9 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
                   whiteSpace: 'nowrap', 
                   overflow: 'hidden', 
                   display: 'inline-block',
+                  fontSize: '0.75rem', 
+                  fontWeight: 600, 
+                  color: '#ef4444' 
                 }}
               >
                 Arıza Bildirimi
@@ -1725,9 +1799,11 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
         
         <div className="top-bar-right">
           <div className="connection-status">
-            <div className={`connection-dot ${plcConnected ? 'connected' : 'disconnected'}`} />
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.25rem' }}>
-              <span>PLC {plcConnected ? 'Bağlı' : 'Bağlantı Yok'}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div className={`connection-dot ${plcConnected ? 'connected' : 'disconnected'}`} />
+                <span>PLC {plcConnected ? 'Bağlı' : 'Bağlantı Yok'}</span>
+              </div>
               <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>
                 {machineName || machineTableName || 'Makine'}
               </span>
@@ -2154,10 +2230,17 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
           <CheckCircle size={18} />
           İş Sonu
         </button>
-        {/* Arıza Bildirimi Butonu - bottomBar içinde, sağda - Framer Motion ile */}
+        {/* Arıza Bildirimi Butonu - bottomBar içinde, sağda - Framer Motion ile (PC) / Direkt tıklama (Mobil) */}
         <motion.button
           className="maintenance-button-minimal"
           onClick={() => {
+            // Mobilde direkt modal aç (window.innerWidth <= 768)
+            if (window.innerWidth <= 768) {
+              setShowMaintenanceModal(true);
+              return;
+            }
+            
+            // PC'de animasyonlu açılma
             if (maintenanceButtonExpanded) {
               // Timeout'u temizle
               if (maintenanceButtonTimeoutRef.current) {
@@ -2239,6 +2322,9 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
                   whiteSpace: 'nowrap', 
                   overflow: 'hidden', 
                   display: 'inline-block',
+                  fontSize: '0.75rem', 
+                  fontWeight: 600, 
+                  color: '#ef4444' 
                 }}
               >
                 Arıza Bildirimi
@@ -2249,71 +2335,17 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
       </div>
 
       {/* Paylaşımlı Duruş Bilgi Modalı */}
-      {showSharedStoppageHelp && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.65)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100000
-          }}
-          onClick={() => setShowSharedStoppageHelp(false)}
-        >
-          <div
-            style={{
-              backgroundColor: '#0f172a',
-              borderRadius: '16px',
-              padding: '1.5rem',
-              maxWidth: '520px',
-              width: '90%',
-              color: '#e2e8f0',
-              border: '1px solid rgba(148, 163, 184, 0.3)',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
-              position: 'relative'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setShowSharedStoppageHelp(false)}
-              style={{
-                position: 'absolute',
-                top: '0.6rem',
-                right: '0.6rem',
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                border: '1px solid rgba(148, 163, 184, 0.3)',
-                background: 'rgba(148, 163, 184, 0.1)',
-                color: '#e2e8f0',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              <X size={18} />
-            </button>
-            <h3 style={{ margin: 0, marginBottom: '0.5rem', fontSize: '1.2rem', fontWeight: 700 }}>Paylaşımlı Duruş Bilgilendirme</h3>
-            <p style={{ margin: 0, marginBottom: '0.75rem', color: '#cbd5e1', lineHeight: 1.4 }}>
-              Tek fiziksel duruşu birden fazla sebebe bölmek için bu akışı kullanın.
-            </p>
-            <ul style={{ margin: 0, paddingLeft: '1.1rem', display: 'grid', gap: '0.4rem', color: '#e2e8f0', lineHeight: 1.4 }}>
-              <li>Duruş sebebini seçin, makine duruyor olmalı.</li>
-              <li>Operatör işini bitirdiğinde “Paylaşımlı Duruş”a basın.</li>
-              <li>O ana kadar olan segment kaydedilir; yeni segment aynı anda başlar.</li>
-              <li>Yeni sebep için tekrar “Paylaşımlı Duruş”a basabilir veya makineyi çalıştırabilirsiniz.</li>
-            </ul>
-          </div>
-        </div>
-      )}
 
       {/* Duruş Sebebi Modal'ı - DÜZELTİLMİŞ HALİ */}
       {showStopReason && (
         <div 
-          style={{
+          className="stop-reason-modal"
+          style={window.innerWidth <= 768 ? {
+            // Mobil: CSS'te tanımlı, inline style minimal
+            position: 'fixed',
+            zIndex: 99999
+          } : {
+            // PC: Normal modal
             position: 'fixed',
             top: 0,
             left: 0,
@@ -2331,7 +2363,15 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
           }}
         >
           <div 
-            style={{
+            className="stop-reason-modal-content"
+            style={window.innerWidth <= 768 ? {
+              // Mobil: CSS'te tanımlı, inline style minimal - genişlik sınırlaması yok
+              backgroundColor: '#1e293b',
+              overflowY: 'auto',
+              width: '100%',
+              maxWidth: '100%'
+            } : {
+              // PC: Normal modal içeriği
               backgroundColor: '#1e293b',
               borderRadius: '20px',
               padding: '2rem',
@@ -2390,36 +2430,6 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
               <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <button
-                    onClick={() => setShowSharedStoppageHelp(true)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: '24px',
-                      height: '24px',
-                      borderRadius: '50%',
-                      backgroundColor: 'rgba(148, 163, 184, 0.2)',
-                      border: '1px solid rgba(148, 163, 184, 0.3)',
-                      color: '#94a3b8',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      padding: 0
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.backgroundColor = 'rgba(148, 163, 184, 0.3)';
-                      e.target.style.transform = 'scale(1.1)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.backgroundColor = 'rgba(148, 163, 184, 0.2)';
-                      e.target.style.transform = 'scale(1)';
-                    }}
-                    title="Paylaşımlı Duruş Hakkında"
-                  >
-                    ?
-                  </button>
-                  <button
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -2452,36 +2462,6 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
                     {isSplittingStoppage ? 'Kaydediliyor...' : 'Paylaşımlı Duruş'}
                   </button>
                 </div>
-                <button
-                  onClick={() => setShowSharedStoppageHelp(true)}
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(148, 163, 184, 0.4)',
-                    background: 'rgba(148, 163, 184, 0.12)',
-                    color: '#e2e8f0',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s ease',
-                    fontWeight: 700,
-                    fontSize: '0.9rem',
-                    padding: 0
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.backgroundColor = 'rgba(148, 163, 184, 0.2)';
-                    e.target.style.transform = 'scale(1.05)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.backgroundColor = 'rgba(148, 163, 184, 0.12)';
-                    e.target.style.transform = 'scale(1)';
-                  }}
-                  title="Paylaşımlı duruş nasıl kullanılır?"
-                >
-                  ?
-                </button>
                 <button 
                   style={{
                     display: 'flex',

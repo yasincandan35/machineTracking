@@ -974,7 +974,10 @@
   z-index: 101;
   display: flex;
   align-items: center;
+  justify-content: center;
+  width: 32px;
   height: 32px;
+  min-width: 32px;
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 8px;
   background: rgba(239, 68, 68, 0.15);
@@ -985,6 +988,7 @@
   white-space: nowrap;
   font-size: 0.75rem;
   font-weight: 600;
+  padding: 0;
 }
 
 .maintenance-button-minimal:hover {
@@ -1693,39 +1697,77 @@
   }
 }
 
-/* Mobil Optimizasyonu - 768px ve altı - Dikey Tasarım */
+/* ============================================
+   MOBİL TASARIM - 768px ve altı
+   Sıfırdan mobil için optimize edilmiş tasarım
+   Öncelik: Hızlı duruş sebebi seçimi
+   ============================================ */
 @media (max-width: 768px) {
-  /* Top Bar - Mobil için kompakt ve dikey */
-  .top-bar {
-    padding: 0.5rem;
-    min-height: auto;
+  /* ========== APP CONTAINER - Mobil için tam ekran flexbox ========== */
+  .machine-screen-root .app-container {
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    align-items: stretch;
+    /* iPhone notch alanı için safe-area-inset padding */
+    padding-top: env(safe-area-inset-top);
+    background: var(--bg-primary);
+    position: relative;
   }
   
+  
+  /* Notch alanını top bar rengiyle doldur */
+  .machine-screen-root .app-container::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-top);
+    background: var(--bg-topbar);
+    z-index: 1000;
+  }
+  
+  /* ========== TOP BAR - Kompakt ve Bilgilendirici ========== */
+  .top-bar {
+    padding: 0.5rem 0.75rem;
+    min-height: 70px;
+    flex-direction: row;
+    gap: 0.75rem;
+    align-items: center;
+    flex-shrink: 0;
+    background: var(--bg-topbar);
+    position: relative;
+    border-bottom: 1px solid var(--border-primary);
+  }
+  
+  /* Status Indicator - Sol tarafta, kompakt */
   .status-indicator {
-    font-size: 0.8rem;
-    padding: 0.5rem;
+    flex: 0 0 auto;
+    padding: 0.5rem 0.75rem;
     gap: 0.5rem;
-    width: 100%;
-    justify-content: center;
+    min-width: auto;
+    border-radius: 10px;
   }
   
   .status-icon {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
   }
   
   .status-label {
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 700;
+    white-space: nowrap;
   }
   
   .status-subtitle {
-    font-size: 0.75rem;
-    line-height: 1.3;
-    text-align: center;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
   }
   
   /* Makine resimlerini mobilde gizle */
@@ -1733,80 +1775,120 @@
     display: none;
   }
   
-  /* Top bar sağ taraf - yatay düzen, kompakt */
+  /* Top bar sağ taraf - Mobilde düzen */
   .top-bar-right {
+    flex: 1;
+    display: flex;
     flex-direction: row;
-    gap: 0.75rem;
+    gap: 0.5rem;
     align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    padding: 0.25rem 0;
+    justify-content: flex-end;
+    min-width: 0;
+    position: relative;
   }
   
+  /* Tarih - Sağ üstte */
+  .datetime-display {
+    font-size: 0.65rem;
+    gap: 0.2rem;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  
+  /* PLC durumu ve makine ismi - Status indicator'ın yanına, biraz aralık bırakarak */
   .connection-status {
-    font-size: 0.7rem;
-    gap: 0.3rem;
+    position: absolute;
+    /* Status indicator'ın yanına koy (status-indicator genişliği + gap) */
+    left: calc(1px + 0.75rem); /* Status indicator yaklaşık genişliği + gap */
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.65rem;
+    gap: 0.25rem;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
+    flex-shrink: 0;
+    justify-content: center;
+    z-index: 2;
+  }
+  
+  .connection-status > div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  
+  .connection-status > div > div:first-child {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    justify-content: center !important;
+  }
+  
+  .connection-status .connection-dot {
+    flex-shrink: 0;
+    width: 10px !important;
+    height: 10px !important;
   }
   
   .connection-status span:first-child {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
+    white-space: nowrap;
   }
   
   .connection-status span:last-child {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     color: #94a3b8;
-  }
-  
-  .datetime-display {
-    font-size: 0.7rem;
-    gap: 0.25rem;
-    text-align: right;
+    white-space: nowrap;
   }
   
   .datetime-display .date {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
+    white-space: nowrap;
   }
   
   .datetime-display .time {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     font-weight: 600;
+    white-space: nowrap;
   }
   
-  /* Main Content - Dikey scroll, tek kolon, düzgün sıralama */
+  /* Duyuru bar - Mobilde daha kompakt */
+  .announcement-bar {
+    height: 24px;
+    font-size: 0.65rem;
+    flex-shrink: 0;
+  }
+  
+  /* ========== MAIN CONTENT - Scroll edilebilir içerik (SADECE MOBİL) ========== */
   .main-content {
-    grid-template-columns: 1fr !important;
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
     gap: 0.75rem !important;
     padding: 0.75rem !important;
-    height: auto !important;
-    min-height: calc(100vh - 200px) !important;
-    max-height: none !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
-    display: flex !important;
-    flex-direction: column !important;
-    padding-bottom: 90px !important; /* Bottom bar için alan */
-    align-items: stretch !important;
+    /* Bottom bar için scroll sonunda boşluk - son kart bottom bar'ın üst hizasında bitmeli - SADECE MOBİL */
+    /* Bottom bar min-height 80px + padding 0.75rem (top) = ~92px, scroll sonunda tam hizasında bitmesi için */
+    padding-bottom: calc(80px + 0.75rem + 0.5rem) !important; /* Bottom bar yüksekliği + küçük açıklık - scroll sonunda kart bottom bar'ın üst hizasında bitmeli */
+    min-height: 0;
+    -webkit-overflow-scrolling: touch;
+    /* Scroll bounce'ı engelle - sayfa esnemesin */
+    overscroll-behavior: contain;
+    overscroll-behavior-y: contain;
+    /* Arka plan rengi - scroll bounce'da beyaz gözükmesin */
+    background: var(--bg-primary);
   }
   
-  /* Paneller - Mobilde dikey, düzgün sıralama */
+  /* Paneller - Mobilde wrapper'ları kaldır, kartları direkt main-content'in çocukları yap */
+  /* display: contents ile wrapper'lar görünmez olur ve kartlar direkt main-content'in çocukları gibi davranır */
   .left-panel,
   .right-panel {
-    width: 100% !important;
-    max-width: 100% !important;
-    gap: 0.75rem !important;
-    display: flex !important;
-    flex-direction: column !important;
-    flex: 0 0 auto !important;
-    min-height: 0 !important;
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    box-sizing: border-box !important;
+    display: contents !important; /* Wrapper'ı kaldır, kartları direkt main-content'in çocukları yap */
   }
   
-  /* Kartlar - Mobil için optimize, dikey sıralama, düzgün spacing, üst üste geçme yok */
+  /* Kartlar - Mobil için optimize, eşit spacing */
   .order-card,
   .production-card,
   .no-order-card,
@@ -1818,197 +1900,425 @@
     border-radius: 12px !important;
     margin: 0 !important;
     margin-bottom: 0 !important;
+    margin-top: 0 !important;
     flex: 0 0 auto !important;
-    min-height: 0 !important;
-    height: auto !important;
     box-sizing: border-box !important;
-    position: relative !important;
-    overflow: visible !important;
-    display: block !important;
-    z-index: 1 !important;
+    background: var(--bg-card);
+    border: 1px solid var(--border-primary);
+    overflow: hidden !important; /* İçerik taşmasını önle */
   }
   
-  /* StoppageInfoCard'ın içeriğini mobilde optimize et */
-  .stoppage-info-card {
-    max-height: none !important;
+  /* Kartlar arası boşluğu sadece gap ile kontrol et - display: contents ile paneller görünmez olduğu için direkt kartlar main-content'in çocukları */
+  .main-content > * {
+    margin-bottom: 0 !important;
+  }
+  
+  /* Mobilde duruş içeriği - Grid layout korunuyor, sadece liste overflow kontrolü */
+  .stoppage-info-card .stoppage-content {
+    max-height: 400px !important; /* Maksimum yükseklik sınırı */
+    overflow: hidden !important;
+  }
+  
+  /* Mobilde liste - Scroll edilebilir, aşağı taşmasını önle, alt padding ile son öğe okunabilir */
+  .stoppage-info-card .stoppage-list {
+    max-height: 100% !important;
     overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: 1rem !important; /* Alt padding - son öğe tam görünsün */
+    padding-right: 0.5rem !important;
   }
   
-  /* Production card içindeki absolute elementleri mobilde düzelt */
-  .production-card > div[style*="position: absolute"] {
-    display: none !important; /* Mobilde grafik ikonunu gizle */
-  }
-  
-  .production-card > div[style*="paddingRight: '5rem'"] {
-    padding-right: 1rem !important;
+  /* Son öğe için ekstra margin */
+  .stoppage-info-card .stoppage-list .stoppage-item:last-child {
+    margin-bottom: 0.5rem !important;
   }
   
   .card-header {
     margin-bottom: 0.75rem;
     padding-bottom: 0.5rem;
     gap: 0.5rem;
+    border-bottom: 1px solid var(--border-primary);
   }
   
   .card-header svg {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
   }
   
   .card-header h2 {
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 700;
+  }
+  
+  /* Production card - Mobilde grafik ikonunu gizle */
+  .production-card > div[style*="position: absolute"] {
+    display: none !important;
+  }
+  
+  .production-card > div[style*="paddingRight: '5rem'"] {
+    padding-right: 1rem !important;
   }
   
   .production-grid {
     grid-template-columns: repeat(2, 1fr);
-  }
-  
-  /* Bottom Buttons - Mobil için sabit alt bar, büyük butonlar */
-  .bottom-buttons {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    flex-direction: row;
-    flex-wrap: nowrap;
     gap: 0.5rem;
-    padding: 0.75rem;
-    min-height: 70px;
-    justify-content: space-between;
-    background: var(--bg-bottom-bar);
-    border-top: 1px solid var(--border-primary);
-    z-index: 100;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
   }
   
-  .bottom-buttons button {
-    flex: 1;
-    padding: 0.9rem 0.5rem;
-    font-size: 0.85rem;
-    font-weight: 600;
-    min-height: 50px;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  
-  /* Arıza bildirimi butonu - bottom bar içinde */
-  .maintenance-button-minimal {
-    position: static;
-    width: 50px;
-    height: 50px;
-    flex-shrink: 0;
-    margin-left: 0.5rem;
-  }
-  
-  .modal-container {
-    padding: 1rem;
-    width: 95%;
-    max-height: 90vh;
-  }
-  
-  .reason-buttons {
-    grid-template-columns: 1fr;
-  }
-  
-  /* Duyuru bar - mobilde daha kompakt */
-  .announcement-bar {
-    height: 28px;
-    font-size: 0.7rem;
-  }
-  
-  /* Duruş overlay - mobilde tam ekran yakın */
-  .downtime-overlay {
-    padding: 0.5rem;
-  }
-  
-  .downtime-content {
-    padding: 1rem;
-    max-width: 95%;
-    border-radius: 12px;
-  }
-  
-  .downtime-icon {
-    width: 36px;
-    height: 36px;
-  }
-  
-  .downtime-icon svg {
-    width: 28px;
-    height: 28px;
-  }
-  
-  .downtime-label {
-    font-size: 0.65rem;
-  }
-  
-  .downtime-time {
-    font-size: 1.1rem;
-  }
-  
-  /* Duruş sebebi modal - mobilde tam ekran yakın */
-  .stop-reason-modal-content {
-    max-width: 98% !important;
-    max-height: 95vh !important;
-    padding: 1rem !important;
-    border-radius: 16px !important;
-  }
-  
-  /* Modal başlık - mobilde daha kompakt */
-  .stop-reason-modal h2 {
-    font-size: 1.5rem !important;
-    margin-bottom: 0.5rem !important;
-  }
-  
-  /* Modal başlık container - mobilde daha kompakt */
-  .stop-reason-modal > div > div:first-child {
-    margin-bottom: 1rem !important;
-    padding-bottom: 0.75rem !important;
-  }
-  
-  /* StopReasonCategories container - mobilde dikey layout */
-  .stop-reason-modal > div > div:last-child > div[style*="grid-template-columns"] {
-    display: flex !important;
-    flex-direction: column !important;
-    height: auto !important;
-    max-height: none !important;
-    gap: 0.75rem !important;
-  }
-  
-  /* Kategori listesi - mobilde yatay scroll */
-  .stop-reason-modal > div > div:last-child > div[style*="grid-template-columns"] > div:first-child {
-    max-height: 120px !important;
-    overflow-y: hidden !important;
-    overflow-x: auto !important;
+  /* ========== BOTTOM BAR - Sabit, Büyük Butonlar, Duruş Sebebi Öncelikli ========== */
+  .bottom-buttons {
+    position: fixed !important;
+    bottom: 0 !important; /* Tabana dayalı */
+    left: 0 !important;
+    right: 0 !important;
     display: flex !important;
     flex-direction: row !important;
-    flex-wrap: nowrap !important;
+    gap: 0.5rem !important;
+    padding: 0.75rem !important;
+    min-height: 80px !important;
+    background: var(--bg-bottom-bar) !important;
+    border-top: 2px solid var(--border-primary) !important;
+    z-index: 100 !important;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4) !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+  
+  /* Bottom bar içindeki tüm butonlar normal flow'da olmalı */
+  .bottom-buttons button {
+    position: relative !important;
+    flex-shrink: 0 !important;
+  }
+  
+  /* Duruş Sebebi butonu - En büyük ve öne çıkan */
+  .bottom-buttons button.primary-button,
+  .bottom-buttons button:first-of-type {
+    flex: 2 !important;
+    min-width: 0 !important;
+    padding: 1rem 0.75rem !important;
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    min-height: 60px !important;
+    max-height: 60px !important; /* Maksimum yükseklik - safe area padding'i butonları etkilemesin */
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4) !important;
+  }
+  
+  /* Diğer butonlar - Daha küçük */
+  .bottom-buttons button:not(:first-of-type):not(.maintenance-button-minimal) {
+    flex: 1 !important;
+    min-width: 0 !important;
+    padding: 0.9rem 0.5rem !important;
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+    min-height: 60px !important;
+    max-height: 60px !important; /* Maksimum yükseklik - safe area padding'i butonları etkilemesin */
+  }
+  
+  .bottom-buttons button:disabled {
+    opacity: 0.4;
+  }
+  
+  /* Arıza bildirimi butonu - Mobilde bottom bar içinde, direkt tıklama, animasyon yok */
+  .bottom-buttons .maintenance-button-minimal {
+    position: static !important;
+    width: 56px !important;
+    height: 60px !important;
+    min-width: 56px !important;
+    flex-shrink: 0 !important;
+    padding: 0 !important;
+    border-radius: 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 102 !important;
+    transform: none !important;
+    border: 1px solid rgba(239, 68, 68, 0.3) !important;
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: #ef4444 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+    margin-left: 0.5rem !important;
+  }
+  
+  /* Mobilde animasyonları devre dışı bırak */
+  .bottom-buttons .maintenance-button-minimal * {
+    animation: none !important;
+    transition: none !important;
+  }
+  
+  .bottom-buttons .maintenance-button-minimal:hover {
+    transform: none !important;
+    background: rgba(239, 68, 68, 0.25) !important;
+  }
+  
+  .bottom-buttons .maintenance-button-minimal:active {
+    transform: scale(0.95) !important;
+  }
+  
+  /* ========== DURUŞ SÜRESİ OVERLAY - Mobilde gizle ========== */
+  .downtime-overlay {
+    display: none !important;
+  }
+  
+  /* ========== DURUŞ SEBEBİ MODAL - Mobil Dikey Tasarım Optimizasyonu ========== */
+  /* Modal backdrop - Tam ekran, koyu */
+  .stop-reason-modal {
+    /* Kayan yazının (announcement bar) tam altından başla - top bar (70px min-height) + announcement bar (24px height) */
+    top: calc(env(safe-area-inset-top, 0px) + 70px + 24px) !important;
+    /* En alta kadar git */
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    position: fixed !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: rgba(0, 0, 0, 0.95) !important;
+    background-color: rgba(0, 0, 0, 0.95) !important;
+    display: flex !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    z-index: 99999 !important;
+  }
+  
+  /* Modal içeriği - Tam ekran, dikey layout */
+  .stop-reason-modal-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    padding: 0.75rem !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+    gap: 0.75rem !important;
+    background-color: #1e293b !important;
+    overflow-y: auto !important;
+    /* Inline style override */
+    border: none !important;
+    box-shadow: none !important;
+  }
+  
+  /* Modal başlık container - Kompakt ve dikey */
+  .stop-reason-modal > div > div:first-child {
+    flex-shrink: 0 !important;
+    margin-bottom: 0 !important;
+    padding: 0.75rem !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    border-bottom: 1px solid var(--border-primary) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Başlık ve aktif sebep - Dikey düzen */
+  .stop-reason-modal > div > div:first-child > div:first-child {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+  }
+  
+  .stop-reason-modal h2 {
+    font-size: 1.25rem !important;
+    margin-bottom: 0 !important;
+    line-height: 1.3 !important;
+  }
+  
+  /* Aktif sebep gösterimi - Kompakt */
+  .stop-reason-modal > div > div:first-child > div > div[style*="backgroundColor: 'rgba(59, 130, 246, 0.12)'"] {
+    font-size: 0.8rem !important;
+    padding: 0.4rem 0.6rem !important;
+    line-height: 1.3 !important;
+  }
+  
+  /* Modal başlık container - Dikey düzen */
+  .stop-reason-modal > div > div:first-child {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  
+  /* Modal butonları - Başlığın altında, tam genişlik */
+  .stop-reason-modal > div > div:first-child > div:last-child {
+    flex-shrink: 0 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.5rem !important;
+    padding-top: 0.5rem !important;
+    border-top: 1px solid rgba(148, 163, 184, 0.1) !important;
+    margin-top: 0.5rem !important;
+    width: 100% !important;
+  }
+  
+  .stop-reason-modal > div > div:first-child > div:last-child > div {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.5rem !important;
+    flex: 1 !important;
+  }
+  
+  .stop-reason-modal > div > div:first-child > div:last-child button {
+    flex: 1 !important;
+    padding: 0.7rem 0.5rem !important;
+    font-size: 0.8rem !important;
+    font-weight: 600 !important;
+    min-height: 42px !important;
+    border-radius: 10px !important;
+    white-space: nowrap !important;
+  }
+  
+  /* Paylaşımlı Duruş butonu - Daha belirgin */
+  .stop-reason-modal > div > div:first-child > div:last-child button[style*="backgroundColor: 'rgba(59, 130, 246, 0.2)'"] {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3) !important;
+    color: #ffffff !important;
+  }
+  
+  
+  /* Kapat ve İş Sonu butonları */
+  .stop-reason-modal > div > div:first-child > div:last-child button[style*="backgroundColor: 'rgba(239, 68, 68, 0.2)'"],
+  .stop-reason-modal > div > div:first-child > div:last-child button[style*="backgroundColor: 'rgba(148, 163, 184, 0.2)'"]:not([style*="width"]) {
+    flex: 0 0 auto !important;
+    min-width: 80px !important;
+  }
+  
+  /* StopReasonCategories - Ana içerik alanı */
+  .stop-reason-modal > div > div:last-child {
+    flex: 1 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Ana container - className ile seç */
+  .stop-reason-modal > div > div:last-child > div.category-not-selected,
+  .stop-reason-modal > div > div:last-child > div.category-selected {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  
+  /* Kategori seçili DEĞİLSE - Sebep listesi en altta küçük, kategori listesi yukarıdan büyük */
+  .stop-reason-modal > div > div:last-child > div.category-not-selected {
+    justify-content: flex-end !important; /* Sebep listesi en altta */
+  }
+  
+  /* Kategori listesi - Üstte, yatay scroll, dinamik boyutlandırma */
+  .stop-reason-modal > div > div:last-child > div.category-not-selected > div:first-child,
+  .stop-reason-modal > div > div:last-child > div.category-selected > div:first-child {
+    display: flex !important;
+    flex-direction: row !important;
     gap: 0.5rem !important;
     padding: 0.5rem !important;
-    border-radius: 12px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    background: rgba(51, 65, 85, 0.3);
+    border-radius: 10px;
+    border: 1px solid var(--border-primary);
+    width: 100% !important;
+    box-sizing: border-box !important;
+    /* Animasyon için transition */
+    transition: flex 0.4s cubic-bezier(0.4, 0, 0.2, 1), max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), min-height 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
   
-  .stop-reason-modal > div > div:last-child > div[style*="grid-template-columns"] > div:first-child > div {
-    flex: 0 0 auto !important;
-    min-width: 140px !important;
-    margin-bottom: 0 !important;
-  }
-  
-  /* Sebep listesi - mobilde tam genişlik, büyük butonlar */
-  .stop-reason-modal > div > div:last-child > div[style*="grid-template-columns"] > div:last-child {
-    max-height: 50vh !important;
+  /* Kategori seçili DEĞİLSE - Kategori listesi büyük (yukarıdan başlar, sebep listesinin üstüne kadar) */
+  .stop-reason-modal > div > div:last-child > div.category-not-selected > div:first-child {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    /* Kategori seçili değilken dikey scroll da yapabilmeli */
+    flex-wrap: wrap !important;
     overflow-y: auto !important;
-    padding: 0.75rem !important;
-    border-radius: 12px !important;
+    align-content: flex-start !important;
+  }
+  
+  /* Kategori seçili DEĞİLSE - Sebep listesi en altta küçük (sadece yazı için) */
+  .stop-reason-modal > div > div:last-child > div.category-not-selected > div:last-child {
+    flex: 0 0 auto !important;
+    min-height: 80px !important;
+    max-height: 80px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow-y: hidden !important;
+  }
+  
+  /* Kategori seçiliyse - Normal layout, kategori yukarıda küçük */
+  .stop-reason-modal > div > div:last-child > div.category-selected {
+    justify-content: flex-start !important; /* Normal sıralama */
+  }
+  
+  /* Kategori seçiliyse - Kategori listesi küçük (yukarıda) */
+  .stop-reason-modal > div > div:last-child > div.category-selected > div:first-child {
+    flex: 0 0 auto !important;
+    max-height: 110px !important;
+    min-height: 80px !important;
+    overflow-y: hidden !important; /* Kategori seçiliyken dikey scroll yok */
+    flex-wrap: nowrap !important;
+  }
+  
+  /* Kategori seçiliyse - Sebep listesi büyük (kategorinin altından aşağıya) */
+  .stop-reason-modal > div > div:last-child > div.category-selected > div:last-child {
+    flex: 1 1 auto !important;
+    min-height: 200px !important;
+    display: block !important; /* Normal display */
+  }
+  
+  /* Kategori butonları */
+  .stop-reason-modal > div > div:last-child > div.category-not-selected > div:first-child > div,
+  .stop-reason-modal > div > div:last-child > div.category-selected > div:first-child > div {
+    flex: 0 0 auto !important;
+    min-width: 130px !important;
+    margin-bottom: 0 !important;
+    padding: 0.6rem 0.85rem !important;
+    font-size: 0.85rem !important;
+  }
+  
+  /* Sebep listesi - Ana alan, büyük butonlar, dinamik boyutlandırma */
+  .stop-reason-modal > div > div:last-child > div.category-not-selected > div:last-child,
+  .stop-reason-modal > div > div:last-child > div.category-selected > div:last-child {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: 0.5rem !important;
+    background: rgba(51, 65, 85, 0.3);
+    border-radius: 10px;
+    border: 1px solid var(--border-primary);
+    -webkit-overflow-scrolling: touch;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    /* Animasyon için transition */
+    transition: flex 0.4s cubic-bezier(0.4, 0, 0.2, 1), max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), min-height 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
   
   .stop-reason-modal > div > div:last-child > div[style*="grid-template-columns"] > div:last-child button {
     width: 100% !important;
-    padding: 1.25rem 1rem !important;
-    font-size: 1.1rem !important;
-    min-height: 56px !important;
-    margin-bottom: 0.5rem !important;
+    padding: 1.25rem 0.9rem !important;
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    min-height: 60px !important;
+    margin-bottom: 0.6rem !important;
+    border-radius: 10px !important;
+    text-align: left !important;
+    line-height: 1.4 !important;
+  }
+  
+  /* Son buton için margin kaldır */
+  .stop-reason-modal > div > div:last-child > div[style*="grid-template-columns"] > div:last-child button:last-child {
+    margin-bottom: 0 !important;
   }
 }
 
@@ -2019,7 +2329,7 @@
   }
   
   .machine-images {
-    /* Topbar içinde ortalanacak */
+    display: none; /* Topbar içinde ortalanacak */
   }
   
   .top-bar {

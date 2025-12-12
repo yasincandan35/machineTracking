@@ -679,30 +679,154 @@ END";
         /// <summary>
         /// <summary>
         /// Aktif (henüz kaydedilmemiş) duruş sebebini getir
-        /// GET /api/plcdata/current-stoppage-reason
+        /// GET /api/plcdata/current-stoppage-reason?machine=lemanic3_tracking
         /// </summary>
         [HttpGet("current-stoppage-reason")]
-        public IActionResult GetCurrentStoppageReason()
+        public async Task<IActionResult> GetCurrentStoppageReason([FromQuery] string? machine = null)
         {
             try
             {
                 var service = GetPLCDataCollectorService();
-                var dataProcessor = service?.GetDataProcessor();
-                if (dataProcessor == null)
+                if (service == null)
                 {
                     return StatusCode(503, new { error = "PLC servisi başlatılmamış" });
                 }
 
-                var (categoryId, reasonId, stoppageStartTime) = dataProcessor.GetCurrentStoppageReason();
-                
-                return Ok(new 
-                { 
-                    categoryId,
-                    reasonId,
-                    stoppageStartTime,
-                    hasReason = categoryId > 0 && reasonId > 0,
-                    isStopped = stoppageStartTime.HasValue
-                });
+                // Machine parametresi verilmişse kontrol et
+                if (!string.IsNullOrEmpty(machine))
+                {
+                    var machineInfo = await _dashboardContext.MachineLists
+                        .FirstOrDefaultAsync(m => m.TableName.ToLower() == machine.ToLower());
+                    
+                    if (machineInfo == null)
+                    {
+                        return BadRequest(new { error = $"Makine bulunamadı: {machine}" });
+                    }
+
+                    // DatabaseName kullan (eğer boşsa TableName'den hesapla)
+                    var originalTableName = machineInfo.TableName;
+                    var tableName = NormalizeTableName(originalTableName);
+                    string databaseName;
+                    
+                    if (!string.IsNullOrEmpty(machineInfo.DatabaseName))
+                    {
+                        databaseName = machineInfo.DatabaseName;
+                    }
+                    else
+                    {
+                        var baseName = originalTableName.Replace("_tracking", "");
+                        if (char.IsDigit(baseName.LastOrDefault()))
+                        {
+                            var lastDigit = baseName.Last();
+                            databaseName = baseName.Substring(0, baseName.Length - 1) + "_" + lastDigit + "_tracking";
+                        }
+                        else
+                        {
+                            databaseName = baseName + "_tracking";
+                        }
+                    }
+
+                    // Aktif makine kontrolü
+                    var activeMachineName = service.GetCurrentMachineName();
+                    bool isActiveMachine = false;
+                    
+                    if (!string.IsNullOrEmpty(activeMachineName))
+                    {
+                        isActiveMachine = activeMachineName.Equals(databaseName, StringComparison.OrdinalIgnoreCase) ||
+                                         activeMachineName.Equals(tableName, StringComparison.OrdinalIgnoreCase);
+                    }
+
+                    // Eğer aktif makine ise DataProcessor'dan oku
+                    if (isActiveMachine)
+                    {
+                        var dataProcessor = service.GetDataProcessor();
+                        if (dataProcessor != null)
+                        {
+                            var (categoryId, reasonId, stoppageStartTime) = dataProcessor.GetCurrentStoppageReason();
+                            
+                            return Ok(new 
+                            { 
+                                categoryId,
+                                reasonId,
+                                stoppageStartTime,
+                                hasReason = categoryId > 0 && reasonId > 0,
+                                isStopped = stoppageStartTime.HasValue
+                            });
+                        }
+                    }
+
+                    // Aktif makine değilse veya DataProcessor yoksa, veritabanından en son aktif duruş kaydını oku
+                    // (end_time null olan en son kayıt)
+                    var connectionString = _machineDatabaseService.GetConnectionString(databaseName);
+                    if (string.IsNullOrEmpty(connectionString))
+                    {
+                        return StatusCode(503, new { error = $"Makine veritabanı bağlantısı bulunamadı: {databaseName}" });
+                    }
+
+                    using (var conn = new SqlConnection(connectionString))
+                    {
+                        await conn.OpenAsync();
+                        
+                        // En son aktif duruş kaydını bul (end_time null)
+                        var query = @"
+                            SELECT TOP 1 category_id, reason_id, start_time
+                            FROM stoppage_records
+                            WHERE end_time IS NULL
+                            ORDER BY start_time DESC";
+
+                        using (var cmd = new SqlCommand(query, conn))
+                        {
+                            using (var reader = await cmd.ExecuteReaderAsync())
+                            {
+                                if (await reader.ReadAsync())
+                                {
+                                    var categoryId = reader.IsDBNull(0) ? 0 : reader.GetInt32(0);
+                                    var reasonId = reader.IsDBNull(1) ? 0 : reader.GetInt32(1);
+                                    var startTime = reader.IsDBNull(2) ? (DateTime?)null : reader.GetDateTime(2);
+                                    
+                                    return Ok(new 
+                                    { 
+                                        categoryId,
+                                        reasonId,
+                                        stoppageStartTime = startTime,
+                                        hasReason = categoryId > 0 && reasonId > 0,
+                                        isStopped = startTime.HasValue
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    // Aktif duruş kaydı bulunamadı
+                    return Ok(new 
+                    { 
+                        categoryId = 0,
+                        reasonId = 0,
+                        stoppageStartTime = (DateTime?)null,
+                        hasReason = false,
+                        isStopped = false
+                    });
+                }
+                else
+                {
+                    // Machine parametresi verilmemişse, aktif makine için DataProcessor'dan oku
+                    var dataProcessor = service.GetDataProcessor();
+                    if (dataProcessor == null)
+                    {
+                        return StatusCode(503, new { error = "PLC servisi başlatılmamış" });
+                    }
+
+                    var (categoryId, reasonId, stoppageStartTime) = dataProcessor.GetCurrentStoppageReason();
+                    
+                    return Ok(new 
+                    { 
+                        categoryId,
+                        reasonId,
+                        stoppageStartTime,
+                        hasReason = categoryId > 0 && reasonId > 0,
+                        isStopped = stoppageStartTime.HasValue
+                    });
+                }
             }
             catch (Exception ex)
             {
