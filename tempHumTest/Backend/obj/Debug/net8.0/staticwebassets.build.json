@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "NF9kXQ/8Y65dZuyrrRlSNurDyHdUyD5d9do+NLD0Luc=",
+  "Source": "TemperatureHumidityAPI",
+  "BasePath": "_content/TemperatureHumidityAPI",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}

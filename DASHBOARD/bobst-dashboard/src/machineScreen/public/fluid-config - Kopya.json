@@ -1,0 +1,78 @@
+{
+  "_comment": "WebGL Fluid Simulation Ayarları - Parametre Açıklamaları",
+  
+  "SIM_RESOLUTION": 256,
+  "_SIM_RESOLUTION": "Simülasyon çözünürlüğü (32-256). Düşük = hızlı ama bulanık, Yüksek = yavaş ama net",
+  
+  "DYE_RESOLUTION": 1024,
+  "_DYE_RESOLUTION": "Renk çözünürlüğü (128-1024). Düşük = hızlı ama az renk, Yüksek = yavaş ama çok renk",
+  
+  "CAPTURE_RESOLUTION": 512,
+  "_CAPTURE_RESOLUTION": "Ekran görüntüsü çözünürlüğü",
+  
+  "DENSITY_DISSIPATION": 1,
+  "_DENSITY_DISSIPATION": "Yoğunluk dağılma hızı (0-4). Düşük = uzun süre kalır, Yüksek = hızlı kaybolur",
+  
+  "VELOCITY_DISSIPATION": 0.05,
+  "_VELOCITY_DISSIPATION": "Hız dağılma hızı (0-4). Düşük = daha uzun hareket, Yüksek = hızlı durur",
+  
+  "PRESSURE": 0.8,
+  "_PRESSURE": "Basınç seviyesi (0-1). Düşük = yumuşak hareket, Yüksek = güçlü hareket",
+  
+  "PRESSURE_ITERATIONS": 1,
+  "_PRESSURE_ITERATIONS": "Basınç hesaplama tekrarı (10-50). Daha fazla = daha doğru ama yavaş",
+  
+  "CURL": 25,
+  "_CURL": "Girdap gücü (0-50). Düşük = düz hareket, Yüksek = çok dönen hareket",
+  
+  "SPLAT_RADIUS": 0.2,
+  "_SPLAT_RADIUS": "Mouse ile oluşturulan efekt boyutu (0.01-1). Küçük = küçük efekt, Büyük = büyük efekt",
+  
+  "SPLAT_FORCE": 3000,
+  "_SPLAT_FORCE": "Mouse efekti gücü (1000-10000). Düşük = zayıf efekt, Yüksek = güçlü efekt",
+  
+  "SHADING": true,
+  "_SHADING": "Gölgelendirme efekti (true/false). true = 3D görünüm, false = düz renk",
+  
+  "COLORFUL": true,
+  "_COLORFUL": "Çok renkli mod (true/false). true = renkli efektler, false = tek renk",
+  
+  "COLOR_UPDATE_SPEED": 2,
+  "_COLOR_UPDATE_SPEED": "Renk değişim hızı (1-20). Düşük = yavaş renk değişimi, Yüksek = hızlı renk değişimi",
+  
+  "PAUSED": false,
+  "_PAUSED": "Simülasyon duraklatma (true/false)",
+  
+  "BACK_COLOR": { "r": 0, "g": 0, "b": 0 },
+  "_BACK_COLOR": "Arka plan rengi (RGB 0-255). {r:0, g:0, b:0} = siyah",
+  
+  "TRANSPARENT": false,
+  "_TRANSPARENT": "Şeffaf arka plan (true/false). true = şeffaf, false = BACK_COLOR kullan",
+  
+  "BLOOM": true,
+  "_BLOOM": "Parlaklık efekti (true/false). true = parlak kenarlar, false = normal",
+  
+  "BLOOM_ITERATIONS": 8,
+  "_BLOOM_ITERATIONS": "Parlaklık hesaplama tekrarı (4-16). Daha fazla = daha parlak ama yavaş",
+  
+  "BLOOM_RESOLUTION": 256,
+  "_BLOOM_RESOLUTION": "Parlaklık çözünürlüğü (128-512)",
+  
+  "BLOOM_INTENSITY": 0.8,
+  "_BLOOM_INTENSITY": "Parlaklık yoğunluğu (0.1-2.0). Düşük = hafif parlaklık, Yüksek = çok parlak",
+  
+  "BLOOM_THRESHOLD": 0.6,
+  "_BLOOM_THRESHOLD": "Parlaklık eşiği (0-1). Düşük = çok şey parlar, Yüksek = az şey parlar",
+  
+  "BLOOM_SOFT_KNEE": 0.7,
+  "_BLOOM_SOFT_KNEE": "Parlaklık geçiş yumuşaklığı (0-1)",
+  
+  "SUNRAYS": true,
+  "_SUNRAYS": "Güneş ışınları efekti (true/false). true = ışın efektleri, false = yok",
+  
+  "SUNRAYS_RESOLUTION": 256,
+  "_SUNRAYS_RESOLUTION": "Güneş ışınları çözünürlüğü (96-256)",
+  
+  "SUNRAYS_WEIGHT": 1.0,
+  "_SUNRAYS_WEIGHT": "Güneş ışınları gücü (0.3-1.0). Düşük = hafif ışınlar, Yüksek = güçlü ışınlar"
+}

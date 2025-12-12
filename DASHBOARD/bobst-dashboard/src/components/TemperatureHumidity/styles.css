@@ -1,0 +1,1473 @@
+/* Root isolation to avoid global theme bleed */
+.temp-hum-root {
+  isolation: isolate;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark Theme (default) */
+.temp-hum-root.theme-dark,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) {
+  background: #0f0f1e;
+  color: #ffffff;
+}
+
+/* Light Theme */
+.temp-hum-root.theme-light {
+  background: #f5f7fa;
+  color: #1a1a2e;
+}
+
+/* Liquid Glass Theme */
+.temp-hum-root.theme-liquid-glass {
+  background: transparent;
+  color: #ffffff;
+}
+
+/* Glass Theme */
+.temp-hum-root.theme-glass {
+  background: transparent;
+  color: #ffffff;
+}
+
+/* Fluid Theme */
+.temp-hum-root.theme-fluid {
+  background: transparent;
+  color: #ffffff;
+}
+
+.temp-hum-container {
+  width: 100%;
+  min-height: calc(100vh - 7.5rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.temp-hum-header {
+  padding: 20px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Dark Theme Header */
+.temp-hum-root.theme-dark .temp-hum-header,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .temp-hum-header {
+  background: rgba(26, 26, 46, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Light Theme Header */
+.temp-hum-root.theme-light .temp-hum-header {
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Liquid Glass / Glass / Fluid Theme Header */
+.temp-hum-root.theme-liquid-glass .temp-hum-header,
+.temp-hum-root.theme-glass .temp-hum-header,
+.temp-hum-root.theme-fluid .temp-hum-header {
+  background: rgba(26, 26, 46, 0.7);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.temp-hum-title {
+  font-size: 24px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: color 0.3s ease;
+}
+
+/* Dark Theme Title */
+.temp-hum-root.theme-dark .temp-hum-title,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .temp-hum-title {
+  color: #ffffff;
+}
+
+/* Light Theme Title */
+.temp-hum-root.theme-light .temp-hum-title {
+  color: #1a1a2e;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Title */
+.temp-hum-root.theme-liquid-glass .temp-hum-title,
+.temp-hum-root.theme-glass .temp-hum-title,
+.temp-hum-root.theme-fluid .temp-hum-title {
+  color: #ffffff;
+}
+
+.temp-hum-tabs {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.temp-hum-tab {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, color 0.3s ease;
+}
+
+/* Dark Theme Tab */
+.temp-hum-root.theme-dark .temp-hum-tab,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .temp-hum-tab {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.temp-hum-root.theme-dark .temp-hum-tab:hover,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .temp-hum-tab:hover {
+  background: rgba(102, 126, 234, 0.3);
+  transform: translateY(-1px);
+}
+
+.temp-hum-root.theme-dark .temp-hum-tab.active,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .temp-hum-tab.active {
+  background: rgba(102, 126, 234, 0.35);
+  box-shadow: 0 6px 18px rgba(102, 126, 234, 0.25);
+  font-weight: 600;
+}
+
+/* Light Theme Tab */
+.temp-hum-root.theme-light .temp-hum-tab {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1a1a2e;
+}
+
+.temp-hum-root.theme-light .temp-hum-tab:hover {
+  background: rgba(102, 126, 234, 0.15);
+  transform: translateY(-1px);
+}
+
+.temp-hum-root.theme-light .temp-hum-tab.active {
+  background: rgba(102, 126, 234, 0.25);
+  box-shadow: 0 6px 18px rgba(102, 126, 234, 0.2);
+  font-weight: 600;
+  color: #667eea;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Tab */
+.temp-hum-root.theme-liquid-glass .temp-hum-tab,
+.temp-hum-root.theme-glass .temp-hum-tab,
+.temp-hum-root.theme-fluid .temp-hum-tab {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.temp-hum-root.theme-liquid-glass .temp-hum-tab:hover,
+.temp-hum-root.theme-glass .temp-hum-tab:hover,
+.temp-hum-root.theme-fluid .temp-hum-tab:hover {
+  background: rgba(102, 126, 234, 0.3);
+  transform: translateY(-1px);
+}
+
+.temp-hum-root.theme-liquid-glass .temp-hum-tab.active,
+.temp-hum-root.theme-glass .temp-hum-tab.active,
+.temp-hum-root.theme-fluid .temp-hum-tab.active {
+  background: rgba(102, 126, 234, 0.35);
+  box-shadow: 0 6px 18px rgba(102, 126, 234, 0.25);
+  font-weight: 600;
+}
+
+.temp-hum-content {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+}
+.temp-hum-root h1,
+.temp-hum-root h2,
+.temp-hum-root h3 {
+  letter-spacing: 0.2px;
+}
+
+.temp-hum-root h1 { font-size: 24px; font-weight: 700; }
+.temp-hum-root h2 { font-size: 20px; font-weight: 700; }
+.temp-hum-root h3 { font-size: 16px; font-weight: 700; }
+
+.temp-hum-root label { font-size: 13px; opacity: 0.9; }
+
+.temp-hum-root .btn { letter-spacing: 0.2px; }
+.temp-hum-root .btn.btn-primary { box-shadow: 0 4px 15px rgba(102,126,234,0.25); }
+.temp-hum-root .btn.btn-primary:hover { box-shadow: 0 6px 20px rgba(102,126,234,0.35); transform: translateY(-1px); }
+
+.temp-hum-root .form-control::placeholder { color: rgba(255,255,255,0.5); }
+.temp-hum-root select.form-control { appearance: none; background-image: linear-gradient(45deg, transparent 50%, #cbd5e1 50%), linear-gradient(135deg, #cbd5e1 50%, transparent 50%); background-position: calc(100% - 18px) calc(1em + 2px), calc(100% - 13px) calc(1em + 2px); background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+
+/* Override generic dashboard theme inside this scope */
+/* Dark Theme Cards */
+.temp-hum-root.theme-dark .card,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .card {
+  background: rgba(26, 26, 46, 0.95) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+}
+
+/* Light Theme Cards */
+.temp-hum-root.theme-light .card {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #1a1a2e !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  border-radius: 12px !important;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Cards */
+.temp-hum-root.theme-liquid-glass .card,
+.temp-hum-root.theme-glass .card,
+.temp-hum-root.theme-fluid .card {
+  background: rgba(26, 26, 46, 0.7) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 12px !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Analysis layout */
+.temp-hum-root .analysis-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+.temp-hum-root .section-card {
+  padding: 20px !important;
+}
+
+/* Dark Theme Section Title */
+.temp-hum-root.theme-dark .section-title,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .section-title {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #e5e7eb;
+}
+
+/* Light Theme Section Title */
+.temp-hum-root.theme-light .section-title {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Section Title */
+.temp-hum-root.theme-liquid-glass .section-title,
+.temp-hum-root.theme-glass .section-title,
+.temp-hum-root.theme-fluid .section-title {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #e5e7eb;
+}
+
+@media (min-width: 1200px) {
+  .temp-hum-root .analysis-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.temp-hum-root .stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+}
+
+/* Dark Theme Stat Card */
+.temp-hum-root.theme-dark .stat-card,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .stat-card {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.25);
+}
+
+.temp-hum-root.theme-dark .stat-card h4,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .stat-card h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #cbd5e1;
+}
+
+/* Light Theme Stat Card */
+.temp-hum-root.theme-light .stat-card {
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 12px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.1);
+}
+
+.temp-hum-root.theme-light .stat-card h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Stat Card */
+.temp-hum-root.theme-liquid-glass .stat-card,
+.temp-hum-root.theme-glass .stat-card,
+.temp-hum-root.theme-fluid .stat-card {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.3);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.temp-hum-root.theme-liquid-glass .stat-card h4,
+.temp-hum-root.theme-glass .stat-card h4,
+.temp-hum-root.theme-fluid .stat-card h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #e5e7eb;
+}
+
+/* Dark Theme Stat Row */
+.temp-hum-root.theme-dark .stat-row,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 6px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+  color: #e5e7eb;
+}
+
+/* Light Theme Stat Row */
+.temp-hum-root.theme-light .stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 6px;
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.1);
+  color: #4b5563;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Stat Row */
+.temp-hum-root.theme-liquid-glass .stat-row,
+.temp-hum-root.theme-glass .stat-row,
+.temp-hum-root.theme-fluid .stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 6px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.15);
+  color: #e5e7eb;
+}
+
+.temp-hum-root .stat-row:last-child { border-bottom: 0; }
+
+/* Table & pagination visibility */
+/* Dark Theme Table */
+.temp-hum-root.theme-dark table,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) table {
+  color: #e5e7eb;
+}
+
+.temp-hum-root.theme-dark thead,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) thead {
+  color: #93c5fd;
+}
+
+.temp-hum-root.theme-dark tbody tr:nth-child(odd),
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) tbody tr:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.temp-hum-root.theme-dark tbody tr:nth-child(even),
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Light Theme Table */
+.temp-hum-root.theme-light table {
+  color: #1a1a2e;
+}
+
+.temp-hum-root.theme-light thead {
+  color: #4b5563;
+}
+
+.temp-hum-root.theme-light tbody tr:nth-child(odd) {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.temp-hum-root.theme-light tbody tr:nth-child(even) {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* Liquid Glass / Glass / Fluid Theme Table */
+.temp-hum-root.theme-liquid-glass table,
+.temp-hum-root.theme-glass table,
+.temp-hum-root.theme-fluid table {
+  color: #e5e7eb;
+}
+
+.temp-hum-root.theme-liquid-glass thead,
+.temp-hum-root.theme-glass thead,
+.temp-hum-root.theme-fluid thead {
+  color: #93c5fd;
+}
+
+.temp-hum-root.theme-liquid-glass tbody tr:nth-child(odd),
+.temp-hum-root.theme-glass tbody tr:nth-child(odd),
+.temp-hum-root.theme-fluid tbody tr:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.temp-hum-root.theme-liquid-glass tbody tr:nth-child(even),
+.temp-hum-root.theme-glass tbody tr:nth-child(even),
+.temp-hum-root.theme-fluid tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Pagination */
+.temp-hum-root .pagination {
+  display: flex !important;
+  gap: 6px;
+  justify-content: center;
+  padding: 10px 0;
+}
+
+/* Dark Theme Pagination */
+.temp-hum-root.theme-dark .page-item .page-link,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .page-item .page-link {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+
+.temp-hum-root.theme-dark .page-item.active .page-link,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .page-item.active .page-link {
+  background: #667eea;
+  border-color: #667eea;
+}
+
+/* Light Theme Pagination */
+.temp-hum-root.theme-light .page-item .page-link {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1a1a2e;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.temp-hum-root.theme-light .page-item.active .page-link {
+  background: #667eea;
+  border-color: #667eea;
+  color: #fff;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Pagination */
+.temp-hum-root.theme-liquid-glass .page-item .page-link,
+.temp-hum-root.theme-glass .page-item .page-link,
+.temp-hum-root.theme-fluid .page-item .page-link {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.temp-hum-root.theme-liquid-glass .page-item.active .page-link,
+.temp-hum-root.theme-glass .page-item.active .page-link,
+.temp-hum-root.theme-fluid .page-item.active .page-link {
+  background: #667eea;
+  border-color: #667eea;
+}
+
+/* Pagination buttons in HistoricalDataTable */
+.temp-hum-root .pagination-btn {
+  background-color: #667eea !important;
+  color: #ffffff !important;
+  border: 1px solid #667eea !important;
+  padding: 8px 16px !important;
+  border-radius: 6px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+  outline: none !important;
+}
+
+.temp-hum-root.theme-light .pagination-btn:disabled {
+  background-color: rgba(0, 0, 0, 0.1) !important;
+  color: rgba(0, 0, 0, 0.3) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  cursor: not-allowed !important;
+  opacity: 0.5 !important;
+}
+
+.temp-hum-root:not(.theme-light) .pagination-btn:disabled {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.3) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  cursor: not-allowed !important;
+  opacity: 0.5 !important;
+}
+
+.temp-hum-root.theme-light .pagination-text {
+  color: #1a1a2e !important;
+}
+
+.temp-hum-root:not(.theme-light) .pagination-text {
+  color: #ffffff !important;
+}
+
+/* Pagination container */
+.temp-hum-root.theme-light .pagination-container {
+  background-color: transparent !important;
+}
+
+.temp-hum-root:not(.theme-light) .pagination-container {
+  background-color: transparent !important;
+}
+
+/* Chart container background for light theme */
+.temp-hum-root.theme-light.chart-container {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.temp-hum-root:not(.theme-light).chart-container {
+  background-color: rgba(26, 26, 46, 0.95) !important;
+}
+
+.temp-hum-root .btn {
+  height: 45px;
+  border-radius: 10px;
+  font-weight: 600;
+  padding: 10px 18px;
+}
+
+.temp-hum-root .btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+  color: #ffffff !important;
+}
+
+.temp-hum-root .form-group { display: flex; flex-direction: column; }
+/* Dark Theme Form */
+.temp-hum-root.theme-dark .form-group label,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .form-group label {
+  color: #ffffff !important;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.temp-hum-root.theme-dark .form-control,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .form-control {
+  height: 45px;
+  font-size: 16px;
+  padding: 12px 16px;
+  background: rgba(26, 26, 46, 0.95) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 8px;
+}
+
+/* Light Theme Form */
+.temp-hum-root.theme-light .form-group label {
+  color: #1a1a2e !important;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.temp-hum-root.theme-light .form-control {
+  height: 45px;
+  font-size: 16px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #1a1a2e !important;
+  border: 1px solid rgba(0, 0, 0, 0.2) !important;
+  border-radius: 8px;
+}
+
+.temp-hum-root.theme-light select.form-control {
+  background-image: linear-gradient(45deg, transparent 50%, #1a1a2e 50%), linear-gradient(135deg, #1a1a2e 50%, transparent 50%) !important;
+  background-position: calc(100% - 18px) calc(1em + 2px), calc(100% - 13px) calc(1em + 2px) !important;
+  background-size: 5px 5px, 5px 5px !important;
+  background-repeat: no-repeat !important;
+}
+
+.temp-hum-root.theme-light .form-control::placeholder {
+  color: rgba(26, 26, 46, 0.5) !important;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Form */
+.temp-hum-root.theme-liquid-glass .form-group label,
+.temp-hum-root.theme-glass .form-group label,
+.temp-hum-root.theme-fluid .form-group label {
+  color: #ffffff !important;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.temp-hum-root.theme-liquid-glass .form-control,
+.temp-hum-root.theme-glass .form-control,
+.temp-hum-root.theme-fluid .form-control {
+  height: 45px;
+  font-size: 16px;
+  padding: 12px 16px;
+  background: rgba(26, 26, 46, 0.7) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Dark Theme DatePicker */
+.temp-hum-root.theme-dark .react-datepicker,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .react-datepicker,
+.temp-hum-root.theme-dark .react-datepicker__header,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .react-datepicker__header,
+.temp-hum-root.theme-dark .react-datepicker__day,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .react-datepicker__day,
+.temp-hum-root.theme-dark .react-datepicker__time-list,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .react-datepicker__time-list,
+.temp-hum-root.theme-dark .react-datepicker__current-month,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .react-datepicker__current-month,
+.temp-hum-root.theme-dark .react-datepicker__day-name,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .react-datepicker__day-name {
+  background: rgba(26, 26, 46, 0.98) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Light Theme DatePicker */
+.temp-hum-root.theme-light .react-datepicker,
+.temp-hum-root.theme-light .react-datepicker__header,
+.temp-hum-root.theme-light .react-datepicker__day,
+.temp-hum-root.theme-light .react-datepicker__time-list,
+.temp-hum-root.theme-light .react-datepicker__current-month,
+.temp-hum-root.theme-light .react-datepicker__day-name {
+  background: rgba(255, 255, 255, 0.98) !important;
+  color: #1a1a2e !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Liquid Glass / Glass / Fluid Theme DatePicker */
+.temp-hum-root.theme-liquid-glass .react-datepicker,
+.temp-hum-root.theme-glass .react-datepicker,
+.temp-hum-root.theme-fluid .react-datepicker,
+.temp-hum-root.theme-liquid-glass .react-datepicker__header,
+.temp-hum-root.theme-glass .react-datepicker__header,
+.temp-hum-root.theme-fluid .react-datepicker__header,
+.temp-hum-root.theme-liquid-glass .react-datepicker__day,
+.temp-hum-root.theme-glass .react-datepicker__day,
+.temp-hum-root.theme-fluid .react-datepicker__day,
+.temp-hum-root.theme-liquid-glass .react-datepicker__time-list,
+.temp-hum-root.theme-glass .react-datepicker__time-list,
+.temp-hum-root.theme-fluid .react-datepicker__time-list,
+.temp-hum-root.theme-liquid-glass .react-datepicker__current-month,
+.temp-hum-root.theme-glass .react-datepicker__current-month,
+.temp-hum-root.theme-fluid .react-datepicker__current-month,
+.temp-hum-root.theme-liquid-glass .react-datepicker__day-name,
+.temp-hum-root.theme-glass .react-datepicker__day-name,
+.temp-hum-root.theme-fluid .react-datepicker__day-name {
+  background: rgba(26, 26, 46, 0.9) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Ensure DatePicker inputs align and match form-control sizing */
+/* Dark Theme DatePicker Input */
+.temp-hum-root.theme-dark .react-datepicker__input-container input,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .react-datepicker__input-container input {
+  width: 100% !important;
+  height: 45px !important;
+  padding: 12px 16px !important;
+  background: rgba(26, 26, 46, 0.95) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 8px !important;
+  box-sizing: border-box !important;
+}
+
+/* Light Theme DatePicker Input */
+.temp-hum-root.theme-light .react-datepicker__input-container input {
+  width: 100% !important;
+  height: 45px !important;
+  padding: 12px 16px !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #1a1a2e !important;
+  border: 1px solid rgba(0, 0, 0, 0.2) !important;
+  border-radius: 8px !important;
+  box-sizing: border-box !important;
+}
+
+/* Liquid Glass / Glass / Fluid Theme DatePicker Input */
+.temp-hum-root.theme-liquid-glass .react-datepicker__input-container input,
+.temp-hum-root.theme-glass .react-datepicker__input-container input,
+.temp-hum-root.theme-fluid .react-datepicker__input-container input {
+  width: 100% !important;
+  height: 45px !important;
+  padding: 12px 16px !important;
+  background: rgba(26, 26, 46, 0.7) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 8px !important;
+  box-sizing: border-box !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Temperature Humidity System Styles */
+
+/* Dashboard */
+.temp-hum-dashboard {
+  padding: 20px;
+}
+
+/* Devices Grid */
+.temp-hum-root .dashboard { width: 100%; display: block; padding: 20px 0; }
+.temp-hum-root .devices-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 20px;
+  margin: 0 auto 30px auto;
+  width: 100%;
+  max-width: 1400px;
+  place-content: start center;
+}
+
+/* Device Cards */
+/* Dark Theme Device Card */
+.temp-hum-root.theme-dark .device-card,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .device-card {
+  background: rgba(26, 26, 46, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+  color: #ffffff;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Light Theme Device Card */
+.temp-hum-root.theme-light .device-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  color: #1a1a2e;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Device Card */
+.temp-hum-root.theme-liquid-glass .device-card,
+.temp-hum-root.theme-glass .device-card,
+.temp-hum-root.theme-fluid .device-card {
+  background: rgba(26, 26, 46, 0.7);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+  color: #ffffff;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.device-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* Device Card - No Data (boyut değişmez, sadece içerik değişir) */
+/* Kartlar her zaman aynı boyutta kalır, aspect-ratio korunur */
+
+.device-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+/* Dark Theme Device Info */
+.temp-hum-root.theme-dark .device-info h3,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .device-info h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Light Theme Device Info */
+.temp-hum-root.theme-light .device-info h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a2e;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Device Info */
+.temp-hum-root.theme-liquid-glass .device-info h3,
+.temp-hum-root.theme-glass .device-info h3,
+.temp-hum-root.theme-fluid .device-info h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.device-icon {
+  font-size: 18px;
+}
+
+/* Dark Theme Device Location */
+.temp-hum-root.theme-dark .device-location,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .device-location {
+  margin: 0;
+  font-size: 12px;
+  color: #bdc3c7;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Light Theme Device Location */
+.temp-hum-root.theme-light .device-location {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Device Location */
+.temp-hum-root.theme-liquid-glass .device-location,
+.temp-hum-root.theme-glass .device-location,
+.temp-hum-root.theme-fluid .device-location {
+  margin: 0;
+  font-size: 12px;
+  color: #bdc3c7;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.location-icon {
+  font-size: 12px;
+}
+
+.device-status {
+  display: flex;
+  align-items: center;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ethernet-icon {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.status-text {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.device-data {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.data-footer {
+  margin-top: 4px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+  order: -1;
+}
+
+/* Dark Theme Last Update */
+.temp-hum-root.theme-dark .last-update,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .last-update {
+  font-size: 11px;
+  color: #bdc3c7;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-align: left;
+}
+
+/* Light Theme Last Update */
+.temp-hum-root.theme-light .last-update {
+  font-size: 11px;
+  color: #4b5563;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-align: left;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Last Update */
+.temp-hum-root.theme-liquid-glass .last-update,
+.temp-hum-root.theme-glass .last-update,
+.temp-hum-root.theme-fluid .last-update {
+  font-size: 11px;
+  color: #bdc3c7;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.time-icon {
+  font-size: 12px;
+  color: #667eea;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+/* Dark Theme Update Label */
+.temp-hum-root.theme-dark .update-label,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .update-label {
+  font-size: 9px;
+  color: #7f8c8d;
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+/* Light Theme Update Label */
+.temp-hum-root.theme-light .update-label {
+  font-size: 9px;
+  color: #6b7280;
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Update Label */
+.temp-hum-root.theme-liquid-glass .update-label,
+.temp-hum-root.theme-glass .update-label,
+.temp-hum-root.theme-fluid .update-label {
+  font-size: 9px;
+  color: #7f8c8d;
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.data-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+/* Dark Theme Data Item */
+.temp-hum-root.theme-dark .data-item,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .data-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+/* Light Theme Data Item */
+.temp-hum-root.theme-light .data-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 8px;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Data Item */
+.temp-hum-root.theme-liquid-glass .data-item,
+.temp-hum-root.theme-glass .data-item,
+.temp-hum-root.theme-fluid .data-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.data-icon {
+  font-size: 24px;
+}
+
+.data-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Dark Theme Data Label */
+.temp-hum-root.theme-dark .data-label,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .data-label {
+  font-size: 12px;
+  color: #bdc3c7;
+  font-weight: 500;
+}
+
+/* Light Theme Data Label */
+.temp-hum-root.theme-light .data-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Data Label */
+.temp-hum-root.theme-liquid-glass .data-label,
+.temp-hum-root.theme-glass .data-label,
+.temp-hum-root.theme-fluid .data-label {
+  font-size: 12px;
+  color: #bdc3c7;
+  font-weight: 500;
+}
+
+.data-value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* Dark Theme Device No Data */
+.temp-hum-root.theme-dark .device-no-data,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .device-no-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 20px;
+  color: #95a5a6;
+}
+
+/* Light Theme Device No Data */
+.temp-hum-root.theme-light .device-no-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 20px;
+  color: #6b7280;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Device No Data */
+.temp-hum-root.theme-liquid-glass .device-no-data,
+.temp-hum-root.theme-glass .device-no-data,
+.temp-hum-root.theme-fluid .device-no-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 20px;
+  color: #95a5a6;
+}
+
+.no-data-icon {
+  font-size: 48px;
+}
+
+.no-data-text {
+  font-size: 14px;
+}
+
+/* Loading */
+/* Dark Theme Loading */
+.temp-hum-root.theme-dark .loading,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #bdc3c7;
+}
+
+/* Light Theme Loading */
+.temp-hum-root.theme-light .loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #6b7280;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Loading */
+.temp-hum-root.theme-liquid-glass .loading,
+.temp-hum-root.theme-glass .loading,
+.temp-hum-root.theme-fluid .loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #bdc3c7;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading p {
+  margin-top: 20px;
+  font-size: 16px;
+}
+
+/* Error */
+.error {
+  background: rgba(220, 53, 69, 0.1);
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  color: #dc3545;
+  padding: 20px;
+  border-radius: 12px;
+  margin: 20px 0;
+}
+
+/* Responsive */
+@media (max-width: 1400px) {
+  .temp-hum-root .devices-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 1100px) {
+  .temp-hum-root .devices-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .temp-hum-root .devices-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .temp-hum-root .devices-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .temp-hum-root .device-card {
+    aspect-ratio: auto;
+    padding: 18px;
+  }
+
+  .temp-hum-root .device-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .temp-hum-root .device-status {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .temp-hum-root .data-row {
+    gap: 12px;
+  }
+
+  .temp-hum-root .data-item {
+    padding: 12px 14px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .temp-hum-header {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  .temp-hum-container {
+    min-height: calc(100vh - 6.5rem);
+  }
+
+  .temp-hum-header {
+    padding: 16px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 20px;
+  }
+
+  .temp-hum-title {
+    font-size: 20px;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .temp-hum-tabs {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .temp-hum-tab {
+    width: 100%;
+    text-align: center;
+    padding: 12px 16px;
+    font-size: 15px;
+  }
+
+  .temp-hum-content {
+    padding: 16px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .temp-hum-title {
+    font-size: 18px;
+    gap: 8px;
+  }
+
+  .temp-hum-tab {
+    font-size: 14px;
+    padding: 12px;
+  }
+}
+
+/* Color Settings Section */
+/* Dark Theme Color Settings */
+.temp-hum-root.theme-dark .color-settings-section,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .color-settings-section {
+  background: rgba(26, 26, 46, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.temp-hum-root.theme-dark .color-settings-title,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .color-settings-title {
+  color: #ffffff;
+}
+
+.temp-hum-root.theme-dark .color-settings-desc,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .color-settings-desc {
+  color: #b0b0b0;
+}
+
+.temp-hum-root.theme-dark .color-settings-card,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .color-settings-card {
+  background: rgba(26, 26, 46, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.temp-hum-root.theme-dark .color-settings-card-title,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .color-settings-card-title {
+  color: #ffffff;
+}
+
+.temp-hum-root.theme-dark .color-settings-label,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .color-settings-label {
+  color: #ffffff;
+}
+
+/* Light Theme Color Settings */
+.temp-hum-root.theme-light .color-settings-section {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.temp-hum-root.theme-light .color-settings-title {
+  color: #1a1a2e;
+}
+
+.temp-hum-root.theme-light .color-settings-desc {
+  color: #4b5563;
+}
+
+.temp-hum-root.theme-light .color-settings-card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.temp-hum-root.theme-light .color-settings-card-title {
+  color: #1a1a2e;
+}
+
+.temp-hum-root.theme-light .color-settings-label {
+  color: #1a1a2e;
+}
+
+/* Liquid Glass / Glass / Fluid Theme Color Settings */
+.temp-hum-root.theme-liquid-glass .color-settings-section,
+.temp-hum-root.theme-glass .color-settings-section,
+.temp-hum-root.theme-fluid .color-settings-section {
+  background: rgba(26, 26, 46, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.temp-hum-root.theme-liquid-glass .color-settings-title,
+.temp-hum-root.theme-glass .color-settings-title,
+.temp-hum-root.theme-fluid .color-settings-title {
+  color: #ffffff;
+}
+
+.temp-hum-root.theme-liquid-glass .color-settings-desc,
+.temp-hum-root.theme-glass .color-settings-desc,
+.temp-hum-root.theme-fluid .color-settings-desc {
+  color: #b0b0b0;
+}
+
+.temp-hum-root.theme-liquid-glass .color-settings-card,
+.temp-hum-root.theme-glass .color-settings-card,
+.temp-hum-root.theme-fluid .color-settings-card {
+  background: rgba(26, 26, 46, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.temp-hum-root.theme-liquid-glass .color-settings-card-title,
+.temp-hum-root.theme-glass .color-settings-card-title,
+.temp-hum-root.theme-fluid .color-settings-card-title {
+  color: #ffffff;
+}
+
+.temp-hum-root.theme-liquid-glass .color-settings-label,
+.temp-hum-root.theme-glass .color-settings-label,
+.temp-hum-root.theme-fluid .color-settings-label {
+  color: #ffffff;
+}
+
+/* Settings Helper Text (small) */
+.temp-hum-root.theme-dark .color-settings-helper,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .color-settings-helper {
+  color: #b0b0b0;
+}
+
+.temp-hum-root.theme-light .color-settings-helper {
+  color: #6b7280;
+}
+
+.temp-hum-root.theme-liquid-glass .color-settings-helper,
+.temp-hum-root.theme-glass .color-settings-helper,
+.temp-hum-root.theme-fluid .color-settings-helper {
+  color: #b0b0b0;
+}
+
+/* Settings Input Fields */
+.temp-hum-root.theme-dark .color-settings-input,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .color-settings-input {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(26, 26, 46, 0.8);
+  color: #ffffff;
+}
+
+.temp-hum-root.theme-light .color-settings-input {
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.95);
+  color: #1a1a2e;
+}
+
+.temp-hum-root.theme-liquid-glass .color-settings-input,
+.temp-hum-root.theme-glass .color-settings-input,
+.temp-hum-root.theme-fluid .color-settings-input {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(26, 26, 46, 0.8);
+  color: #ffffff;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Settings Headings */
+.temp-hum-root.theme-dark .color-settings-heading,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .color-settings-heading {
+  color: #ffffff;
+}
+
+.temp-hum-root.theme-light .color-settings-heading {
+  color: #1a1a2e;
+}
+
+.temp-hum-root.theme-liquid-glass .color-settings-heading,
+.temp-hum-root.theme-glass .color-settings-heading,
+.temp-hum-root.theme-fluid .color-settings-heading {
+  color: #ffffff;
+}
+
+/* Settings Text/Spans */
+.temp-hum-root.theme-dark .color-settings-text,
+.temp-hum-root:not(.theme-light):not(.theme-liquid-glass):not(.theme-glass):not(.theme-fluid) .color-settings-text {
+  color: #ffffff;
+}
+
+.temp-hum-root.theme-light .color-settings-text {
+  color: #1a1a2e;
+}
+
+.temp-hum-root.theme-liquid-glass .color-settings-text,
+.temp-hum-root.theme-glass .color-settings-text,
+.temp-hum-root.theme-fluid .color-settings-text {
+  color: #ffffff;
+}
+

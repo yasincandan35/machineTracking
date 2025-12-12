@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Makine Yönetim Admin Panel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.8;
+            font-size: 1.1em;
+        }
+
+        .content {
+            padding: 30px;
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+
+        .section {
+            margin-bottom: 40px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
+        }
+
+        .section h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="password"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+            color: white;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .table th,
+        .table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .machine-card {
+            padding: 20px;
+            border: 2px solid #dee2e6;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .machine-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+        }
+
+        .machine-card.selected {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .machine-card h4 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .machine-card p {
+            color: #6c757d;
+            font-size: 14px;
+            margin: 5px 0;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border-color: #28a745;
+        }
+
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+            border-color: #dc3545;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-color: #17a2b8;
+        }
+
+        .save-button-container {
+            position: sticky;
+            bottom: 0;
+            background: white;
+            padding: 20px;
+            border-top: 2px solid #dee2e6;
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .save-button {
+            padding: 15px 50px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .form-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border: 1px solid #dee2e6;
+        }
+
+        .form-section h4 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 Makine Yönetim Admin Panel</h1>
+            <p>Makine ekleme, veri kaynakları, veri tanımları ve cihaz yapılandırması</p>
+        </div>
+
+        <div class="content">
+            <!-- Makine Seçimi -->
+            <div class="section">
+                <h3>📋 Makine Seçimi</h3>
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label for="machineSelect" style="display: block; margin-bottom: 8px; font-weight: bold;">Makine Seçin:</label>
+                    <select id="machineSelect" class="form-control" style="width: 100%; max-width: 400px; padding: 10px; font-size: 16px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="">-- Makine Seçin --</option>
+                        <option value="all">🌐 Main Dashboard (Tüm Makineler)</option>
+                    </select>
+                </div>
+                <div class="loading" id="machinesLoading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Makineler yükleniyor...</p>
+                </div>
+                <div id="machinesList" style="display: none;"></div>
+            </div>
+
+            <!-- Seçili Makine Yapılandırması -->
+            <div id="machineConfigSection" class="section hidden">
+                <h3>⚙️ Makine Yapılandırması: <span id="selectedMachineName"></span></h3>
+                
+                <!-- Veri Kaynakları -->
+                <div class="form-section">
+                    <h4>📡 Veri Kaynakları</h4>
+                    <form id="plcConnectionForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="connectionName">Bağlantı Adı (Teknik)</label>
+                                <input type="text" id="connectionName" name="name" required placeholder="örn: EnergyAnalyzer, MainPLC">
+                            </div>
+                            <div class="form-group">
+                                <label for="connectionDisplayName">Görünen Ad</label>
+                                <input type="text" id="connectionDisplayName" name="displayName" placeholder="örn: Enerji Analizörü, Ana PLC">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="connectionIp">IP Adresi</label>
+                                <input type="text" id="connectionIp" name="ipAddress" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="connectionPort">Port</label>
+                                <input type="number" id="connectionPort" name="port" value="502">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="readInterval">Okuma Aralığı (ms)</label>
+                                <input type="number" id="readInterval" name="readIntervalMs" value="200">
+                            </div>
+                            <div class="form-group">
+                                <label for="sourceType">Veri Kaynağı Tipi</label>
+                                <select id="sourceType" name="sourceType">
+                                    <option value="ModbusTCP">Modbus TCP</option>
+                                    <option value="EnergyAnalyzer">Enerji Analizörü</option>
+                                    <option value="Other">Diğer</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="connectionActive" name="isActive" checked> Aktif
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Veri Kaynağı Ekle</button>
+                    </form>
+                    <div style="margin-top: 20px;">
+                        <div class="loading" id="connectionsLoading" style="display: none;">
+                            <div class="spinner"></div>
+                        </div>
+                        <table class="table" id="connectionsTable" style="display: none;">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Görünen Ad</th>
+                                    <th>Tip</th>
+                                    <th>IP</th>
+                                    <th>Port</th>
+                                    <th>Okuma Aralığı</th>
+                                    <th>Durum</th>
+                                    <th>İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody id="connectionsTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Veri Tanımları -->
+                <div class="form-section" style="margin-top: 30px;">
+                    <h4>📊 Veri Tanımları</h4>
+                    <form id="dataDefinitionForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="definitionName">Veri Adı</label>
+                                <input type="text" id="definitionName" name="name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="definitionDescription">Açıklama</label>
+                                <input type="text" id="definitionDescription" name="description">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="dataType">Veri Tipi</label>
+                                <select id="dataType" name="dataType" required>
+                                    <option value="DINT">DINT</option>
+                                    <option value="REAL">REAL</option>
+                                    <option value="DOUBLE">DOUBLE</option>
+                                    <option value="INT">INT</option>
+                                    <option value="BOOL">BOOL</option>
+                                    <option value="WORD">WORD</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="registerAddress">Register Adresi</label>
+                                <input type="number" id="registerAddress" name="registerAddress" required>
+                                <small style="color: #6c757d;">Not: %MD230 = 460 (x2), %MW100 = 100</small>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="registerCount">Register Sayısı</label>
+                                <input type="number" id="registerCount" name="registerCount" value="1">
+                            </div>
+                            <div class="form-group">
+                                <label for="byteOrder">Byte Order</label>
+                                <select id="byteOrder" name="byteOrder">
+                                    <option value="HighToLow">High to Low</option>
+                                    <option value="LowToHigh">Low to High</option>
+                                    <option value="BigEndian">Big Endian</option>
+                                    <option value="LittleEndian">Little Endian</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="wordSwap">Word Swap</label>
+                                <input type="checkbox" id="wordSwap" name="wordSwap">
+                            </div>
+                            <div class="form-group">
+                                <label for="operationType">İşlem Tipi</label>
+                                <select id="operationType" name="operationType" required>
+                                    <option value="READ">READ</option>
+                                    <option value="WRITE">WRITE</option>
+                                    <option value="READ_WRITE">READ_WRITE</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="plcConnectionId">Veri Kaynağı</label>
+                                <select id="plcConnectionId" name="plcConnectionId" required>
+                                    <option value="">Seçiniz...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="apiEndpoint">API Endpoint</label>
+                                <input type="text" id="apiEndpoint" name="apiEndpoint" required>
+                                <small style="color: #6c757d;">Örn: activePowerW, voltageL1, totalEnergyKwh</small>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="definitionActive" name="isActive" checked> Aktif
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Veri Tanımı Ekle</button>
+                    </form>
+                    <div style="margin-top: 20px;">
+                        <div class="loading" id="definitionsLoading" style="display: none;">
+                            <div class="spinner"></div>
+                        </div>
+                        <table class="table" id="definitionsTable" style="display: none;">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Ad</th>
+                                    <th>Veri Tipi</th>
+                                    <th>Register</th>
+                                    <th>Byte Order</th>
+                                    <th>Word Swap</th>
+                                    <th>API Endpoint</th>
+                                    <th>Veri Kaynağı</th>
+                                    <th>Durum</th>
+                                    <th>İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody id="definitionsTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Yeni Makine Ekleme -->
+            <div class="section">
+                <h3>➕ Yeni Makine Ekle</h3>
+                <form id="machineForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="machineName">Makine Adı</label>
+                            <input type="text" id="machineName" name="machineName" placeholder="Örn: Bobst Lemanic 3" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="tableName">Tablo Adı</label>
+                            <input type="text" id="tableName" name="tableName" placeholder="Örn: lemanic3" required>
+                            <small style="color: #6c757d;">Sistem otomatik olarak "_tracking" ekleyecek</small>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="machineActive" name="isActive"> Aktif Makine Olarak İşaretle
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-success">Makine Ekle</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Kaydet Butonu -->
+        <div class="save-button-container">
+            <button class="btn btn-primary save-button" onclick="saveAll()">💾 Tüm Ayarları Kaydet</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        let selectedMachine = null;
+        let machines = [];
+        let plcConnections = [];
+        let dataDefinitions = [];
+
+        // Sayfa yüklendiğinde
+        document.addEventListener('DOMContentLoaded', function() {
+            loadMachines();
+            
+            // Form submit event'leri
+            document.getElementById('machineForm').addEventListener('submit', handleAddMachine);
+            document.getElementById('plcConnectionForm').addEventListener('submit', handleAddPLCConnection);
+            document.getElementById('dataDefinitionForm').addEventListener('submit', handleAddDataDefinition);
+        });
+
+        // Makineleri yükle
+        async function loadMachines() {
+            const loading = document.getElementById('machinesLoading');
+            const list = document.getElementById('machinesList');
+            
+            try {
+                const response = await fetch(`${API_BASE}/machines`);
+                if (!response.ok) throw new Error('Makineler yüklenemedi');
+                
+                machines = await response.json();
+                loading.style.display = 'none';
+                list.style.display = 'block';
+                
+                renderMachines();
+            } catch (error) {
+                console.error('Makineler yüklenirken hata:', error);
+                loading.innerHTML = '<p style="color: red;">Makineler yüklenemedi: ' + error.message + '</p>';
+            }
+        }
+
+        // Makineleri render et
+        function renderMachines() {
+            const list = document.getElementById('machinesList');
+            if (machines.length === 0) {
+                list.innerHTML = '<p>Henüz makine eklenmemiş.</p>';
+                return;
+            }
+
+            list.innerHTML = machines.map(machine => `
+                <div class="machine-card ${selectedMachine?.Id === machine.id ? 'selected' : ''}" 
+                     onclick="selectMachine(${machine.id})">
+                    <h4>${machine.machineName || machine.MachineName}</h4>
+                    <p><strong>Veritabanı:</strong> ${machine.databaseName || machine.DatabaseName || 'N/A'}</p>
+                    <p><strong>Tablo:</strong> ${machine.tableName || machine.TableName}</p>
+                    <p><strong>Durum:</strong> ${(machine.isActive || machine.IsActive) ? '✅ Aktif' : '❌ Pasif'}</p>
+                </div>
+            `).join('');
+        }
+
+        // Makine seç
+        async function selectMachine(machineId) {
+            selectedMachine = machines.find(m => m.id === machineId || m.Id === machineId);
+            if (!selectedMachine) return;
+
+            document.getElementById('selectedMachineName').textContent = selectedMachine.machineName || selectedMachine.MachineName;
+            document.getElementById('machineConfigSection').classList.remove('hidden');
+            
+            // Makine yapılandırmasını yükle
+            await loadMachineConfig();
+        }
+
+        // Makine yapılandırmasını yükle
+        async function loadMachineConfig() {
+            if (!selectedMachine) return;
+
+            const tableName = selectedMachine.tableName || selectedMachine.TableName;
+            const machine = tableName;
+
+            // Veri Kaynaklarını yükle
+            await loadPLCConnections(machine);
+            
+            // Veri Tanımlarını yükle
+            await loadDataDefinitions(machine);
+        }
+
+        // Veri Kaynaklarını yükle
+        async function loadPLCConnections(machine) {
+            const loading = document.getElementById('connectionsLoading');
+            const table = document.getElementById('connectionsTable');
+            
+            loading.style.display = 'block';
+            table.style.display = 'none';
+
+            try {
+                const response = await fetch(`${API_BASE}/plcconfig/connections?machine=${encodeURIComponent(machine)}`);
+                if (!response.ok) throw new Error('Veri kaynakları yüklenemedi');
+                
+                plcConnections = await response.json();
+                editingPLCConnectionId = null;
+                loading.style.display = 'none';
+                table.style.display = 'table';
+                
+                // Veri Kaynağı dropdown'ını doldur
+                const select = document.getElementById('plcConnectionId');
+                select.innerHTML = '<option value="">Seçiniz...</option>' + 
+                    plcConnections.map(conn => 
+                        `<option value="${conn.id || conn.Id}">${conn.displayName || conn.DisplayName || conn.name || conn.Name}</option>`
+                    ).join('');
+                
+                // Tabloyu render et
+                const tbody = document.getElementById('connectionsTableBody');
+                tbody.innerHTML = plcConnections.map(conn => `
+                    <tr>
+                        <td>${conn.id || conn.Id}</td>
+                        <td>${conn.displayName || conn.DisplayName || conn.name || conn.Name}</td>
+                        <td>${conn.sourceType || conn.SourceType || 'ModbusTCP'}</td>
+                        <td>${conn.ipAddress || conn.IpAddress}</td>
+                        <td>${conn.port || conn.Port}</td>
+                        <td>${conn.readIntervalMs || conn.ReadIntervalMs}ms</td>
+                        <td><span class="status-badge ${(conn.isActive || conn.IsActive) ? 'status-active' : 'status-inactive'}">
+                            ${(conn.isActive || conn.IsActive) ? 'Aktif' : 'Pasif'}
+                        </span></td>
+                        <td>
+                            <button class="btn btn-primary" onclick="editPLCConnection(${conn.id || conn.Id})">Düzenle</button>
+                            <button class="btn btn-danger" onclick="deletePLCConnection(${conn.id || conn.Id})">Sil</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Veri kaynakları yüklenirken hata:', error);
+                loading.innerHTML = '<p style="color: red;">Veri kaynakları yüklenemedi</p>';
+            }
+        }
+
+        // Veri Tanımlarını yükle
+        async function loadDataDefinitions(machine) {
+            const loading = document.getElementById('definitionsLoading');
+            const table = document.getElementById('definitionsTable');
+            
+            loading.style.display = 'block';
+            table.style.display = 'none';
+
+            try {
+                const response = await fetch(`${API_BASE}/plcconfig/data-definitions?machine=${encodeURIComponent(machine)}`);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Veri tanımları yükleme hatası:', errorText);
+                    throw new Error(`Veri tanımları yüklenemedi: ${response.status} ${response.statusText}`);
+                }
+                
+                dataDefinitions = await response.json();
+                editingDataDefinitionId = null;
+                console.log('Veri tanımları yüklendi:', dataDefinitions);
+                loading.style.display = 'none';
+                table.style.display = 'table';
+                
+                const tbody = document.getElementById('definitionsTableBody');
+                tbody.innerHTML = dataDefinitions.map(def => `
+                    <tr>
+                        <td>${def.id || def.Id}</td>
+                        <td>${def.name || def.Name}</td>
+                        <td>${def.dataType || def.DataType}</td>
+                        <td>${def.registerAddress || def.RegisterAddress}</td>
+                        <td>${def.byteOrder || def.ByteOrder || 'N/A'}</td>
+                        <td>${def.wordSwap || def.WordSwap ? 'Evet' : 'Hayır'}</td>
+                        <td>${def.apiEndpoint || def.ApiEndpoint || 'N/A'}</td>
+                        <td>${def.plcConnection?.displayName || def.PLCConnection?.DisplayName || def.plcConnection?.name || def.PLCConnection?.Name || 'N/A'}</td>
+                        <td><span class="status-badge ${(def.isActive || def.IsActive) ? 'status-active' : 'status-inactive'}">
+                            ${(def.isActive || def.IsActive) ? 'Aktif' : 'Pasif'}
+                        </span></td>
+                        <td>
+                            <button class="btn btn-primary" onclick="editDataDefinition(${def.id || def.Id})">Düzenle</button>
+                            <button class="btn btn-danger" onclick="deleteDataDefinition(${def.id || def.Id})">Sil</button>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                // Eğer veri yoksa mesaj göster
+                if (dataDefinitions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 20px;">Henüz veri tanımı eklenmemiş</td></tr>';
+                }
+            } catch (error) {
+                console.error('Veri tanımları yüklenirken hata:', error);
+                loading.innerHTML = '<p style="color: red;">Veri tanımları yüklenemedi</p>';
+            }
+        }
+
+        // Yeni makine ekle
+        async function handleAddMachine(e) {
+            e.preventDefault();
+            
+            let tableName = document.getElementById('tableName').value.trim();
+            if (!tableName) {
+                alert('Tablo adı boş olamaz!');
+                return;
+            }
+
+            // TableName'e "_tracking" ekle
+            if (!tableName.endsWith('_tracking')) {
+                tableName = tableName + '_tracking';
+            }
+
+            const formData = {
+                MachineName: document.getElementById('machineName').value.trim(),
+                TableName: tableName,
+                IsActive: document.getElementById('machineActive').checked
+            };
+
+            if (!formData.MachineName) {
+                alert('Makine adı boş olamaz!');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/machines`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                const responseData = await response.json();
+
+                if (!response.ok) {
+                    console.error('Backend hatası:', responseData);
+                    
+                    // Validation hatalarını detaylı göster
+                    let errorMessage = responseData.message || responseData.title || 'Makine eklenemedi';
+                    if (responseData.errors) {
+                        const errorDetails = Object.entries(responseData.errors)
+                            .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+                            .join('\n');
+                        errorMessage += '\n\nDetaylar:\n' + errorDetails;
+                    }
+                    
+                    throw new Error(errorMessage);
+                }
+
+                alert('Makine başarıyla eklendi!');
+                document.getElementById('machineForm').reset();
+                await loadMachines();
+            } catch (error) {
+                console.error('Makine ekleme hatası:', error);
+                alert('Hata: ' + error.message);
+            }
+        }
+
+        // Veri Kaynağı ekle
+        async function handleAddPLCConnection(e) {
+            e.preventDefault();
+            if (editingPLCConnectionId !== null) {
+                return;
+            }
+            if (!selectedMachine) {
+                alert('Lütfen önce bir makine seçin!');
+                return;
+            }
+
+            const tableName = selectedMachine.tableName || selectedMachine.TableName;
+            const formData = {
+                name: document.getElementById('connectionName').value,
+                displayName: document.getElementById('connectionDisplayName').value || null,
+                ipAddress: document.getElementById('connectionIp').value,
+                port: parseInt(document.getElementById('connectionPort').value),
+                readIntervalMs: parseInt(document.getElementById('readInterval').value),
+                sourceType: document.getElementById('sourceType').value,
+                isActive: document.getElementById('connectionActive').checked,
+                machine: tableName
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/plcconfig/connections`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) throw new Error('Veri kaynağı eklenemedi');
+                
+                alert('Veri kaynağı eklendi!');
+                document.getElementById('plcConnectionForm').reset();
+                editingPLCConnectionId = null;
+                await loadPLCConnections(tableName);
+            } catch (error) {
+                alert('Hata: ' + error.message);
+            }
+        }
+
+        // Veri Tanımı ekle
+        async function handleAddDataDefinition(e) {
+            e.preventDefault();
+            if (editingDataDefinitionId !== null) {
+                return;
+            }
+            if (!selectedMachine) {
+                alert('Lütfen önce bir makine seçin!');
+                return;
+            }
+
+            const tableName = selectedMachine.tableName || selectedMachine.TableName;
+            const formData = {
+                name: document.getElementById('definitionName').value,
+                description: document.getElementById('definitionDescription').value,
+                dataType: document.getElementById('dataType').value,
+                registerAddress: parseInt(document.getElementById('registerAddress').value),
+                registerCount: parseInt(document.getElementById('registerCount').value),
+                byteOrder: document.getElementById('byteOrder').value,
+                wordSwap: document.getElementById('wordSwap').checked,
+                operationType: document.getElementById('operationType').value,
+                plcConnectionId: parseInt(document.getElementById('plcConnectionId').value),
+                apiEndpoint: document.getElementById('apiEndpoint').value,
+                isActive: document.getElementById('definitionActive').checked,
+                machine: tableName
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/plcconfig/data-definitions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) throw new Error('Veri tanımı eklenemedi');
+
+                alert('Veri tanımı eklendi!');
+                document.getElementById('dataDefinitionForm').reset();
+                editingDataDefinitionId = null;
+                await loadDataDefinitions(tableName);
+            } catch (error) {
+                alert('Hata: ' + error.message);
+            }
+        }
+
+        // Tüm ayarları kaydet
+        function saveAll() {
+            alert('Tüm ayarlar kaydedildi!');
+        }
+
+        // Düzenle/Sil fonksiyonları
+        let editingPLCConnectionId = null;
+        let editingDataDefinitionId = null;
+
+        async function editPLCConnection(id) {
+            if (!selectedMachine) return;
+            
+            const tableName = selectedMachine.tableName || selectedMachine.TableName;
+            const connection = plcConnections.find(c => (c.id || c.Id) === id);
+            
+            if (!connection) {
+                alert('Veri kaynağı bulunamadı!');
+                return;
+            }
+
+            // Formu doldur
+            editingPLCConnectionId = id;
+            document.getElementById('connectionName').value = connection.name || connection.Name || '';
+            document.getElementById('connectionDisplayName').value = connection.displayName || connection.DisplayName || '';
+            document.getElementById('connectionIp').value = connection.ipAddress || connection.IpAddress || '';
+            document.getElementById('connectionPort').value = connection.port || connection.Port || 502;
+            document.getElementById('readInterval').value = connection.readIntervalMs || connection.ReadIntervalMs || 200;
+            document.getElementById('sourceType').value = connection.sourceType || connection.SourceType || 'ModbusTCP';
+            document.getElementById('connectionActive').checked = connection.isActive || connection.IsActive || false;
+
+            // Form başlığını değiştir
+            const form = document.getElementById('plcConnectionForm');
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.textContent = 'Veri Kaynağını Güncelle';
+            
+            // Form submit'ini değiştir
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                await updatePLCConnection(id, tableName);
+            };
+
+            // Formu görünür yap (scroll to)
+            form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        async function updatePLCConnection(id, machine) {
+            const formData = {
+                name: document.getElementById('connectionName').value,
+                displayName: document.getElementById('connectionDisplayName').value || null,
+                ipAddress: document.getElementById('connectionIp').value,
+                port: parseInt(document.getElementById('connectionPort').value),
+                readIntervalMs: parseInt(document.getElementById('readInterval').value),
+                sourceType: document.getElementById('sourceType').value,
+                isActive: document.getElementById('connectionActive').checked,
+                machine: machine
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/plcconfig/connections/${id}?machine=${encodeURIComponent(machine)}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) throw new Error('Veri kaynağı güncellenemedi');
+                
+                alert('Veri kaynağı güncellendi!');
+                
+                // Formu sıfırla
+                document.getElementById('plcConnectionForm').reset();
+                editingPLCConnectionId = null;
+                const submitBtn = document.querySelector('#plcConnectionForm button[type="submit"]');
+                submitBtn.textContent = 'Veri Kaynağı Ekle';
+                
+                // Form submit'ini geri al
+                document.getElementById('plcConnectionForm').onsubmit = handleAddPLCConnection;
+                
+                await loadPLCConnections(machine);
+            } catch (error) {
+                alert('Hata: ' + error.message);
+            }
+        }
+
+        async function deletePLCConnection(id) {
+            if (!confirm('Bu veri kaynağını silmek istediğinize emin misiniz?')) return;
+            
+            if (!selectedMachine) return;
+            const tableName = selectedMachine.tableName || selectedMachine.TableName;
+
+            try {
+                const response = await fetch(`${API_BASE}/plcconfig/connections/${id}?machine=${encodeURIComponent(tableName)}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) throw new Error('Veri kaynağı silinemedi');
+                
+                alert('Veri kaynağı silindi!');
+                await loadPLCConnections(tableName);
+            } catch (error) {
+                alert('Hata: ' + error.message);
+            }
+        }
+
+        async function editDataDefinition(id) {
+            if (!selectedMachine) return;
+            
+            const tableName = selectedMachine.tableName || selectedMachine.TableName;
+            const definition = dataDefinitions.find(d => (d.id || d.Id) === id);
+            
+            if (!definition) {
+                alert('Veri tanımı bulunamadı!');
+                return;
+            }
+
+            // Formu doldur
+            editingDataDefinitionId = id;
+            document.getElementById('definitionName').value = definition.name || definition.Name || '';
+            document.getElementById('definitionDescription').value = definition.description || definition.Description || '';
+            document.getElementById('dataType').value = definition.dataType || definition.DataType || 'DINT';
+            document.getElementById('registerAddress').value = definition.registerAddress || definition.RegisterAddress || 0;
+            document.getElementById('registerCount').value = definition.registerCount || definition.RegisterCount || 1;
+            document.getElementById('byteOrder').value = (definition.byteOrder || definition.ByteOrder || 'HighToLow');
+            document.getElementById('wordSwap').checked = definition.wordSwap || definition.WordSwap || false;
+            document.getElementById('operationType').value = definition.operationType || definition.OperationType || 'READ';
+            document.getElementById('plcConnectionId').value = definition.plcConnectionId || definition.PLCConnectionId || '';
+            document.getElementById('apiEndpoint').value = definition.apiEndpoint || definition.ApiEndpoint || '';
+            document.getElementById('definitionActive').checked = definition.isActive || definition.IsActive || false;
+
+            // Form başlığını değiştir
+            const form = document.getElementById('dataDefinitionForm');
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.textContent = 'Veri Tanımını Güncelle';
+            
+            // Form submit'ini değiştir
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                await updateDataDefinition(id, tableName);
+            };
+
+            // Formu görünür yap (scroll to)
+            form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        async function updateDataDefinition(id, machine) {
+            const formData = {
+                name: document.getElementById('definitionName').value,
+                description: document.getElementById('definitionDescription').value,
+                dataType: document.getElementById('dataType').value,
+                registerAddress: parseInt(document.getElementById('registerAddress').value),
+                registerCount: parseInt(document.getElementById('registerCount').value),
+                byteOrder: document.getElementById('byteOrder').value,
+                wordSwap: document.getElementById('wordSwap').checked,
+                operationType: document.getElementById('operationType').value,
+                plcConnectionId: parseInt(document.getElementById('plcConnectionId').value),
+                apiEndpoint: document.getElementById('apiEndpoint').value,
+                isActive: document.getElementById('definitionActive').checked,
+                machine: machine
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/plcconfig/data-definitions/${id}?machine=${encodeURIComponent(machine)}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) throw new Error('Veri tanımı güncellenemedi');
+
+                alert('Veri tanımı güncellendi!');
+                
+                // Formu sıfırla
+                document.getElementById('dataDefinitionForm').reset();
+                editingDataDefinitionId = null;
+                const submitBtn = document.querySelector('#dataDefinitionForm button[type="submit"]');
+                submitBtn.textContent = 'Veri Tanımı Ekle';
+                
+                // Form submit'ini geri al
+                document.getElementById('dataDefinitionForm').onsubmit = handleAddDataDefinition;
+                
+                await loadDataDefinitions(machine);
+            } catch (error) {
+                alert('Hata: ' + error.message);
+            }
+        }
+
+        async function deleteDataDefinition(id) {
+            if (!confirm('Bu veri tanımını silmek istediğinize emin misiniz?')) return;
+            
+            if (!selectedMachine) return;
+            const tableName = selectedMachine.tableName || selectedMachine.TableName;
+
+            try {
+                const response = await fetch(`${API_BASE}/plcconfig/data-definitions/${id}?machine=${encodeURIComponent(tableName)}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) throw new Error('Veri tanımı silinemedi');
+
+                alert('Veri tanımı silindi!');
+                await loadDataDefinitions(tableName);
+            } catch (error) {
+                alert('Hata: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab Verileri Görüntüleyici</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #4a90e2;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+
+        .controls {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .week-info {
+            font-size: 18px;
+            color: #7ed321;
+            font-weight: bold;
+        }
+
+        .hint {
+            font-size: 14px;
+            color: #999;
+            font-style: italic;
+        }
+
+        .chart-container {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .chart-title {
+            font-size: 20px;
+            color: #4a90e2;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        canvas {
+            max-height: 400px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-size: 18px;
+        }
+
+        .error {
+            background: #d0021b;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .stats {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #7ed321;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Lab Verileri Görüntüleyici</h1>
+        
+        <div class="controls">
+            <div class="week-info" id="weekInfo">Hafta: 1 / 1</div>
+            <div class="hint">🖱️ Mouse tekerleği ile haftalar arasında gezin</div>
+        </div>
+
+        <div class="stats" id="stats" style="display: none;">
+            <div class="stat-item">
+                <div class="stat-label">Sıcaklık Min</div>
+                <div class="stat-value" id="tempMin">-</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Sıcaklık Max</div>
+                <div class="stat-value" id="tempMax">-</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Sıcaklık Ort</div>
+                <div class="stat-value" id="tempAvg">-</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Nem Min</div>
+                <div class="stat-value" id="humMin">-</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Nem Max</div>
+                <div class="stat-value" id="humMax">-</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Nem Ort</div>
+                <div class="stat-value" id="humAvg">-</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-title">🌡️ Sıcaklık (°C) & 💧 Nem (%)</div>
+            <canvas id="combinedChart"></canvas>
+        </div>
+
+        <div class="loading" id="loading">Veriler yükleniyor...</div>
+        <div id="error" class="error" style="display: none;"></div>
+    </div>
+
+    <script>
+        let tempData = [];
+        let humData = [];
+        let allTempData = [];
+        let allHumData = [];
+        let currentWeek = 0;
+        let totalWeeks = 0;
+        let combinedChart = null;
+
+        const POINTS_PER_WEEK = 2016; // 7 gün * 24 saat * 12 (5 dakikada bir)
+
+        // Dosyaları yükle
+        async function loadData() {
+            try {
+                const [tempResponse, humResponse] = await Promise.all([
+                    fetch('lab_1year_temp.txt'),
+                    fetch('lab_1year_hum.txt')
+                ]);
+
+                if (!tempResponse.ok || !humResponse.ok) {
+                    throw new Error('Dosyalar bulunamadı!');
+                }
+
+                const tempText = await tempResponse.text();
+                const humText = await humResponse.text();
+
+                // Parse et
+                allTempData = parseFile(tempText);
+                allHumData = parseFile(humText);
+
+                // Eşleştir (aynı timestamp'leri bul)
+                const matchedData = matchData(allTempData, allHumData);
+                allTempData = matchedData.temp;
+                allHumData = matchedData.hum;
+
+                // Hafta sayısını hesapla
+                totalWeeks = Math.ceil(allTempData.length / POINTS_PER_WEEK);
+                currentWeek = totalWeeks - 1; // Son haftayı göster
+
+                document.getElementById('loading').style.display = 'none';
+                updateCharts();
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = 'Hata: ' + error.message;
+            }
+        }
+
+        function parseFile(text) {
+            const lines = text.split('\n');
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+
+                const parts = line.split('\t');
+                if (parts.length < 2) continue;
+
+                const dateStr = parts[0].trim();
+                const valueStr = parts[1].trim().replace(',', '.');
+
+                try {
+                    const date = new Date(dateStr);
+                    const value = parseFloat(valueStr);
+
+                    if (!isNaN(value) && !isNaN(date.getTime())) {
+                        data.push({
+                            timestamp: date,
+                            value: value
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Parse hatası:', line, e);
+                }
+            }
+
+            return data.sort((a, b) => a.timestamp - b.timestamp);
+        }
+
+        function matchData(tempData, humData) {
+            const matched = { temp: [], hum: [] };
+            const humMap = new Map();
+
+            // Nem verilerini map'e al
+            humData.forEach(item => {
+                const key = item.timestamp.getTime();
+                humMap.set(key, item.value);
+            });
+
+            // Sıcaklık verilerini eşleştir
+            tempData.forEach(item => {
+                const key = item.timestamp.getTime();
+                if (humMap.has(key)) {
+                    matched.temp.push(item);
+                    matched.hum.push({
+                        timestamp: item.timestamp,
+                        value: humMap.get(key)
+                    });
+                }
+            });
+
+            return matched;
+        }
+
+        function getWeekData(weekIndex) {
+            const start = weekIndex * POINTS_PER_WEEK;
+            const end = Math.min(start + POINTS_PER_WEEK, allTempData.length);
+
+            return {
+                temp: allTempData.slice(start, end),
+                hum: allHumData.slice(start, end)
+            };
+        }
+
+        function updateCharts() {
+            const weekData = getWeekData(currentWeek);
+            tempData = weekData.temp;
+            humData = weekData.hum;
+
+            // Hafta bilgisini güncelle
+            document.getElementById('weekInfo').textContent = 
+                `Hafta: ${currentWeek + 1} / ${totalWeeks}`;
+
+            // İstatistikleri güncelle
+            updateStats();
+
+            // Grafikleri güncelle
+            updateCombinedChart();
+        }
+
+        function updateStats() {
+            if (tempData.length === 0 || humData.length === 0) return;
+
+            const tempValues = tempData.map(d => d.value);
+            const humValues = humData.map(d => d.value);
+
+            const tempMin = Math.min(...tempValues).toFixed(2);
+            const tempMax = Math.max(...tempValues).toFixed(2);
+            const tempAvg = (tempValues.reduce((a, b) => a + b, 0) / tempValues.length).toFixed(2);
+
+            const humMin = Math.min(...humValues).toFixed(2);
+            const humMax = Math.max(...humValues).toFixed(2);
+            const humAvg = (humValues.reduce((a, b) => a + b, 0) / humValues.length).toFixed(2);
+
+            document.getElementById('tempMin').textContent = tempMin + '°C';
+            document.getElementById('tempMax').textContent = tempMax + '°C';
+            document.getElementById('tempAvg').textContent = tempAvg + '°C';
+            document.getElementById('humMin').textContent = humMin + '%';
+            document.getElementById('humMax').textContent = humMax + '%';
+            document.getElementById('humAvg').textContent = humAvg + '%';
+            document.getElementById('stats').style.display = 'grid';
+        }
+
+        function updateCombinedChart() {
+            const ctx = document.getElementById('combinedChart').getContext('2d');
+
+            if (combinedChart) {
+                combinedChart.destroy();
+            }
+
+            const labels = tempData.map(d => {
+                const date = d.timestamp;
+                return date.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' }) + ' ' +
+                       date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+            });
+
+            combinedChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Sıcaklık (°C)',
+                            data: tempData.map(d => d.value),
+                            borderColor: '#f5a623',
+                            backgroundColor: 'rgba(245, 166, 35, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Nem (%)',
+                            data: humData.map(d => d.value),
+                            borderColor: '#4a90e2',
+                            backgroundColor: 'rgba(74, 144, 226, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 3,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: {
+                                color: '#e0e0e0',
+                                usePointStyle: true,
+                                padding: 15
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#e0e0e0',
+                            bodyColor: '#e0e0e0',
+                            borderColor: '#4a90e2',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        if (context.datasetIndex === 0) {
+                                            label += context.parsed.y.toFixed(2) + '°C';
+                                        } else {
+                                            label += context.parsed.y.toFixed(2) + '%';
+                                        }
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                color: '#999',
+                                maxRotation: 45,
+                                minRotation: 45,
+                                maxTicksLimit: 20
+                            },
+                            grid: {
+                                color: '#333'
+                            }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            ticks: {
+                                color: '#f5a623'
+                            },
+                            grid: {
+                                color: 'rgba(245, 166, 35, 0.1)'
+                            },
+                            title: {
+                                display: true,
+                                text: 'Sıcaklık (°C)',
+                                color: '#f5a623',
+                                font: {
+                                    weight: 'bold'
+                                }
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            ticks: {
+                                color: '#4a90e2'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            },
+                            title: {
+                                display: true,
+                                text: 'Nem (%)',
+                                color: '#4a90e2',
+                                font: {
+                                    weight: 'bold'
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Mouse wheel ile hafta kaydırma
+        let wheelTimeout = null;
+        document.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            
+            if (wheelTimeout) return;
+            
+            wheelTimeout = setTimeout(() => {
+                if (e.deltaY > 0 && currentWeek < totalWeeks - 1) {
+                    currentWeek++;
+                    updateCharts();
+                } else if (e.deltaY < 0 && currentWeek > 0) {
+                    currentWeek--;
+                    updateCharts();
+                }
+                wheelTimeout = null;
+            }, 150);
+        }, { passive: false });
+
+        // Sayfa yüklendiğinde verileri yükle
+        loadData();
+    </script>
+</body>
+</html>
+

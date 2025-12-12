@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EGEM Makine Takip Sistemi - İş Pasaportu</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 120vh;
+            padding: 20px;
+        }
+        
+        .container {
+            width: 100%;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            min-height: 120vh;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .header p {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        
+        .search-section {
+            padding: 40px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+        
+        .search-container {
+            width: 100%;
+            margin: 0 auto;
+            text-align: center;
+        }
+        
+        .search-title {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 300;
+        }
+        
+        .search-form {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .search-input {
+            flex: 1;
+            min-width: 300px;
+            padding: 15px 20px;
+            border: 2px solid #dee2e6;
+            border-radius: 50px;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+        
+        .search-input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .search-btn {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 120px;
+        }
+        
+        .search-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .search-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+        
+        .loading.show {
+            display: block;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error-message {
+            display: none;
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .error-message.show {
+            display: block;
+        }
+        
+        .job-info {
+            padding: 30px;
+            background: #fafafa;
+            border-bottom: 2px solid #e0e0e0;
+            display: none;
+        }
+        
+        .job-info.show {
+            display: block;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        
+        .info-item {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .info-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .info-value {
+            color: #666;
+            font-size: 18px;
+            font-weight: 500;
+        }
+        
+        .machine-diagram {
+            padding: 40px;
+            text-align: center;
+            background: white;
+            display: none;
+        }
+        
+        .machine-diagram.show {
+            display: block;
+        }
+        
+        .diagram-title {
+            font-size: 28px;
+            font-weight: 300;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        .printing-units-container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 0px;
+            margin-bottom: 30px;
+            flex-wrap: nowrap;
+        }
+        
+        .printing-unit.general-container {
+            margin-left: 0px;
+            margin-top: 20px;
+            width: 180px !important;
+            min-height: 300px !important;
+            height: auto !important;
+        }
+        
+        .printing-unit {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            width: 180px;
+            min-height: 300px;
+            height: auto;
+            position: relative;
+            margin: 0;
+            padding: 0;
+            overflow: visible;
+        }
+        
+        .printing-unit-image {
+            width: 180px;
+            height: auto;
+            object-fit: contain;
+            border-radius: 0px;
+            background: transparent;
+            margin: 0;
+            padding: 0;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .printing-unit-image img {
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+        }
+        
+        .color-bar {
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 170px;
+            height: 20px;
+            border-radius: 10px;
+            z-index: 10;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            margin-top: 15px;
+        }
+        
+        .color-bar.premium {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            position: absolute;
+        }
+        
+        .color-bar.premium::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 10px;
+            background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.2) 50%, transparent 70%);
+            pointer-events: none;
+        }
+        
+        
+        .printing-unit-image.feeder-unit {
+            background: transparent !important;
+            width: 180px !important;
+            height: auto !important;
+            min-width: 180px !important;
+            max-width: 180px !important;
+        }
+        
+        
+        
+        .units-container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 0px;
+            margin-top: 50px;
+        }
+        
+        .unit {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 2px solid #dee2e6;
+            border-radius: 12px;
+            padding: 0;
+            width: 180px;
+            min-height: 300px;
+            height: auto;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            cursor: move;
+            transform: none !important;
+        }
+        
+        .color-bar-integrated {
+            width: 100%;
+            height: 25px;
+            border-radius: 10px 10px 0 0;
+            flex-shrink: 0;
+        }
+        
+        .unit > .unit-number,
+        .unit > .unit-data {
+            padding: 0 20px 20px 20px;
+        }
+        
+        .unit > .unit-number {
+            padding-top: 12px;
+        }
+        
+        .unit[draggable="true"]:hover {
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            border-color: #667eea;
+        }
+        
+        .unit.dragging {
+            opacity: 0.5;
+        }
+        
+        .unit.drag-over {
+            border: 2px dashed #667eea;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        }
+        
+        .unit-slot {
+            width: 180px;
+            min-height: 300px;
+            height: auto;
+            border: 2px dashed #ccc;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.02);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            position: relative;
+            padding: 20px;
+        }
+        
+        .unit-slot.drag-over {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+        
+        .slot-number {
+            font-size: 20px;
+            font-weight: 700;
+            color: #999;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .slot-placeholder {
+            color: #bbb;
+            font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+            pointer-events: none;
+        }
+        
+        .unit.general-card {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border: 2px solid #2196f3;
+            width: 180px;
+            min-height: 300px;
+            height: auto;
+            padding: 20px;
+            cursor: default;
+        }
+        
+        
+        
+        .unit-number {
+            font-size: 20px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 12px;
+        }
+        
+        .unit-data {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .data-category {
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 8px;
+            padding: 8px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        .category-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .category-value {
+            font-size: 13px;
+            color: #333;
+            font-weight: 500;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            hyphens: auto;
+        }
+        
+        .category-value.long-text {
+            font-size: 11px;
+            line-height: 1.3;
+        }
+        
+        .blade-select, .blade-angle-select {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+            font-size: 12px;
+            color: #333;
+            margin-top: 4px;
+            cursor: pointer;
+        }
+        
+        .blade-select:focus, .blade-angle-select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+        }
+        
+        .blade-angle-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 4px;
+        }
+        
+        .blade-angle-select {
+            flex: 1;
+        }
+        
+        .blade-separator {
+            font-weight: bold;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .solvent-label-control {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .solvent-btn-side {
+            width: 20px;
+            height: 20px;
+            padding: 0;
+            border: 1px solid #667eea;
+            border-radius: 4px;
+            background: white;
+            color: #667eea;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+        
+        .solvent-btn-side:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .solvent-btn-side:active {
+            transform: scale(0.9);
+        }
+        
+        /* A4 Yatay Yazdırma Stilleri */
+        @media print {
+            @page {
+                size: A4 landscape;
+                margin: 5mm;
+            }
+            
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            
+            body {
+                transform: scale(0.7) !important;
+                transform-origin: top left !important;
+                width: 142.86% !important;
+                height: 142.86% !important;
+            }
+            
+            .header {
+                display: none !important;
+            }
+            
+            .search-section {
+                display: none !important;
+            }
+            
+            .job-info {
+                display: none !important;
+            }
+            
+            .print-button {
+                display: none !important;
+            }
+            
+            .blade-select, .blade-angle-select {
+                -webkit-appearance: none !important;
+                -moz-appearance: none !important;
+                appearance: none !important;
+            }
+            
+            .blade-select::-ms-expand, .blade-angle-select::-ms-expand {
+                display: none !important;
+            }
+        }
+        
+        .print-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+        
+        .print-button:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+        }
+        
+        .unit-data div {
+            margin-bottom: 5px;
+            padding: 2px 0;
+        }
+        
+        .unit-data strong {
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .color-chips {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin: 8px 0;
+        }
+        
+        .color-chip {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
+            transition: all 0.2s ease;
+        }
+        
+        .color-chip:hover {
+            transform: scale(1.2);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        
+        /* Baskı Renkleri */
+        .color-black { background-color: #000000; }
+        .color-green { background-color: #00FF00; }
+        .color-grey { background-color: #808080; }
+        .color-gray { background-color: #808080; }
+        .color-yellow { background-color: #FFFF00; color: #000; text-shadow: none; }
+        .color-cyan { background-color: #00FFFF; color: #000; text-shadow: none; }
+        .color-magenta { background-color: #FF00FF; }
+        .color-red { background-color: #FF0000; }
+        .color-blue { background-color: #0000FF; }
+        .color-white { background-color: #FFFFFF; border: 2px solid #ccc; color: #000; text-shadow: none; }
+        .color-orange { background-color: #FFA500; }
+        .color-purple { background-color: #800080; }
+        .color-pink { background-color: #FFC0CB; color: #000; text-shadow: none; }
+        .color-brown { background-color: #A52A2A; }
+        .color-default { background-color: #6c757d; }
+        
+        .footer {
+            background: #333;
+            color: white;
+            padding: 25px;
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        @media (max-width: 768px) {
+            .search-form {
+                flex-direction: column;
+            }
+            
+            .search-input {
+                min-width: 100%;
+            }
+            
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .units-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .unit {
+                width: 100%;
+            }
+            
+            .header h1 {
+                font-size: 24px;
+            }
+            
+            .diagram-title {
+                font-size: 22px;
+            }
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 18px;
+        }
+    </style>
+</head>
+    <body>
+        <button class="print-button" onclick="window.print()">🖨️ A4 Yazdır</button>
+        <div class="container">
+        <div class="header">
+            <h1>EGEM Makine Takip Sistemi</h1>
+            <p>İş Pasaportu Sorgulama Sistemi</p>
+        </div>
+        
+        <div class="search-section">
+            <div class="search-container">
+                <h2 class="search-title">Makina ve Stok Kodu Sorgulama</h2>
+                
+                <div class="machine-selector" style="margin-bottom: 20px;">
+                    <label for="machineSelect" style="display: block; font-size: 16px; font-weight: 600; margin-bottom: 10px; color: #333;">Makina Seçiniz:</label>
+                    <select id="machineSelect" style="width: 300px; padding: 12px; border: 2px solid #667eea; border-radius: 8px; font-size: 14px; background: white; cursor: pointer;">
+                        <option value="">-- Makina Seçiniz --</option>
+                        <option value="lemanic1">Lemanic 1 (10 Ünite)</option>
+                        <option value="lemanic2">Lemanic 2 (12 Ünite)</option>
+                        <option value="lemanic3">Lemanic 3 (8 Ünite)</option>
+                    </select>
+                </div>
+                
+                <form class="search-form" id="searchForm">
+                    <input 
+                        type="text" 
+                        class="search-input" 
+                        id="stokKoduInput" 
+                        placeholder="Stok kodunu girin (örn: ABC123)"
+                        autocomplete="off"
+                    >
+                    <button type="submit" class="search-btn" id="searchBtn">
+                        Sorgula
+                    </button>
+                </form>
+                
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>Veriler yükleniyor...</p>
+                </div>
+                
+                <div class="error-message" id="errorMessage"></div>
+            </div>
+        </div>
+        
+        <div class="job-info" id="jobInfo">
+            <div class="info-grid" id="infoGrid">
+                <!-- Dinamik olarak doldurulacak -->
+            </div>
+        </div>
+        
+        <div class="machine-diagram" id="machineDiagram">
+            <div class="diagram-title" id="diagramTitle">Makine Diyagramı</div>
+            <div class="printing-units-container" id="printingUnitsContainer">
+                <!-- Dinamik olarak doldurulacak -->
+            </div>
+            
+            <div class="units-container" id="unitsContainer">
+                <!-- Dinamik olarak doldurulacak -->
+            </div>
+        </div>
+        
+    </div>
+
+    <script>
+        // DOM elementleri
+        const searchForm = document.getElementById('searchForm');
+        const stokKoduInput = document.getElementById('stokKoduInput');
+        const machineSelect = document.getElementById('machineSelect');
+        const searchBtn = document.getElementById('searchBtn');
+        const loading = document.getElementById('loading');
+        const errorMessage = document.getElementById('errorMessage');
+        const jobInfo = document.getElementById('jobInfo');
+        const machineDiagram = document.getElementById('machineDiagram');
+        const infoGrid = document.getElementById('infoGrid');
+        const unitsContainer = document.getElementById('unitsContainer');
+
+        // Makina konfigürasyonu
+        const machineConfig = {
+            'lemanic1': { name: 'Lemanic 1', units: 10 },
+            'lemanic2': { name: 'Lemanic 2', units: 12 },
+            'lemanic3': { name: 'Lemanic 3', units: 8 }
+        };
+
+        let selectedMachine = null;
+        let currentJobData = null;
+
+        // Makina seçimi eventi
+        machineSelect.addEventListener('change', function(e) {
+            selectedMachine = e.target.value;
+            if (selectedMachine && currentJobData) {
+                displayMachineDiagram(currentJobData);
+            }
+        });
+
+        // Form submit eventi
+        searchForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const stokKodu = stokKoduInput.value.trim();
+            if (!stokKodu) {
+                showError('Lütfen stok kodunu girin');
+                return;
+            }
+            
+            if (!selectedMachine) {
+                showError('Lütfen önce makina seçiniz');
+                return;
+            }
+            
+            await searchJobData(stokKodu);
+        });
+
+        // Stok kodu arama fonksiyonu
+        async function searchJobData(stokKodu) {
+            try {
+                showLoading(true);
+                hideError();
+                hideResults();
+                
+                const response = await fetch('/api/job-data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        stok_kodu: stokKodu
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayJobData(data.data);
+                } else {
+                    showError(data.error || 'Veri bulunamadı');
+                }
+                
+            } catch (error) {
+                console.error('API hatası:', error);
+                showError('Bağlantı hatası. Lütfen tekrar deneyin.');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // İş verilerini görüntüle
+        function displayJobData(jobData) {
+            // Job data'yı sakla
+            currentJobData = jobData;
+            
+            // Ana bilgileri göster
+            displayMainInfo(jobData);
+            
+            // Makine diyagramını ve üniteleri göster
+            displayMachineDiagram(jobData);
+            
+            // Sonuçları göster
+            showResults();
+        }
+
+        // Ana bilgileri görüntüle (artık Genel kartında gösteriliyor)
+        function displayMainInfo(jobData) {
+            // Ana bilgiler artık Genel kartında gösteriliyor
+            infoGrid.innerHTML = '';
+        }
+
+        // Makine diyagramını ve üniteleri görüntüle
+        function displayMachineDiagram(jobData) {
+            if (!selectedMachine) {
+                return;
+            }
+            
+            // Seçili makinanın ünite sayısını al
+            const machineInfo = machineConfig[selectedMachine];
+            const totalUnits = machineInfo.units;
+            
+            // Başlığı güncelle (İş adıyla)
+            const diagramTitle = document.getElementById('diagramTitle');
+            const isAdi = jobData.is_adi || 'İsimsiz İş';
+            diagramTitle.textContent = `${machineInfo.name} - ${isAdi}`;
+            
+            // Printing unit'leri oluştur (sabit sayıda)
+            createPrintingUnits(jobData, totalUnits);
+            
+            // Ünite kartlarını oluştur (drag & drop ile)
+            createUnitCards(jobData, totalUnits);
+        }
+
+        // Aktif ünite sayısını hesapla
+        function countActiveUnits(renkSiralama) {
+            if (!renkSiralama || !Array.isArray(renkSiralama)) {
+                return 0;
+            }
+            
+            return renkSiralama.filter(renk => renk && renk.trim() !== '' && renk !== '-').length;
+        }
+
+        // Printing unit'leri oluştur
+        function createPrintingUnits(jobData, totalUnits) {
+            const printingUnitsContainer = document.getElementById('printingUnitsContainer');
+            let printingUnitsHtml = '';
+            
+            // Sağdan sola doğru sabit sayıda printingUnit'leri ekle (12,11,10... veya 10,9,8...)
+            for (let unitNumber = totalUnits; unitNumber >= 1; unitNumber--) {
+                printingUnitsHtml += `
+                    <div class="printing-unit" style="width: 180px; min-height: 300px; height: auto;" data-unit="${unitNumber}">
+                        <img src="../lpng/printingUnit.png" alt="Printing Unit ${unitNumber}" class="printing-unit-image" style="width: 180px; height: auto;">
+                    </div>
+                `;
+            }
+            
+            // En sağa Genel kartını ekle (resim yok)
+            printingUnitsHtml += `
+                <div class="printing-unit general-container">
+                    <!-- Resim yok -->
+                </div>
+            `;
+            
+            printingUnitsContainer.innerHTML = printingUnitsHtml;
+        }
+
+        // Aktif üniteleri gerçek sıra numaralarıyla birlikte döndür
+        function getActiveUnitsWithNumbers(renkSiralama) {
+            if (!renkSiralama || !Array.isArray(renkSiralama)) {
+                return [];
+            }
+            
+            const activeUnits = [];
+            for (let i = 0; i < renkSiralama.length; i++) {
+                const renk = renkSiralama[i];
+                if (renk && renk.trim() !== '' && renk !== '-') {
+                    activeUnits.push(i + 1); // RENK_SIRA1 = 1, RENK_SIRA2 = 2, vb.
+                }
+            }
+            
+            return activeUnits;
+        }
+
+        // Uzun metinleri tespit et ve küçük font uygula
+        function getValueClass(value) {
+            if (!value || value === '-') return '';
+            return value.length > 15 ? 'long-text' : '';
+        }
+
+        // Toner değerlerini formatla (birden fazla varsa alt alta)
+        function formatToner(toner) {
+            if (!toner || toner === '-') return '-';
+            
+            // Virgülle ayrılmış tonerları kontrol et
+            const tonerler = toner.split(',').map(t => t.trim()).filter(t => t);
+            
+            if (tonerler.length > 1) {
+                // Birden fazla toner varsa alt alta yaz
+                return tonerler.join('<br>');
+            } else {
+                // Tek toner varsa normal yaz
+                return toner;
+            }
+        }
+
+        // Ünite kartlarını oluştur
+        function createUnitCards(jobData, totalUnits) {
+            let unitsHtml = '';
+            
+            // Veritabanından gelen kartları hazırla
+            const activeUnits = getActiveUnitsWithNumbers(jobData.renk_siralama);
+            const dataCards = {};
+            
+            activeUnits.forEach(unitNumber => {
+                const unitIndex = unitNumber - 1;
+                
+                const renk = jobData.renk_siralama && jobData.renk_siralama[unitIndex] ? jobData.renk_siralama[unitIndex] : '-';
+                const silindir = jobData.silindir_kodlari && jobData.silindir_kodlari[unitIndex] ? jobData.silindir_kodlari[unitIndex] : '-';
+                const murekkep = jobData.murekkep_kodlari && jobData.murekkep_kodlari[unitIndex] ? jobData.murekkep_kodlari[unitIndex] : '-';
+                const vizkozite = jobData.vizkozite && jobData.vizkozite[unitIndex] ? jobData.vizkozite[unitIndex] : '-';
+                const solvent = jobData.solvent_orani && jobData.solvent_orani[unitIndex] ? jobData.solvent_orani[unitIndex] : '-';
+                const medium = jobData.medium_kodlari && jobData.medium_kodlari[unitIndex] ? jobData.medium_kodlari[unitIndex] : '-';
+                const toner = jobData.toner_kodlari && jobData.toner_kodlari[unitIndex] ? jobData.toner_kodlari[unitIndex] : '-';
+                
+                // Solvent formatını kontrol et
+                const solventRegex = /EAL\s*\d+\s*[;,]\s*EAC\s*\d+/i;
+                const hasSolventButtons = solventRegex.test(solvent);
+                
+                dataCards[unitNumber] = { renk, silindir, murekkep, vizkozite, solvent, medium, toner, unitIndex, hasSolventButtons };
+            });
+            
+            // Sağdan sola doğru tüm slotları oluştur (boş slotlar dahil)
+            for (let unitNumber = totalUnits; unitNumber >= 1; unitNumber--) {
+                const hasData = dataCards[unitNumber];
+                
+                if (hasData) {
+                    // Dolu kart
+                    const { renk, silindir, murekkep, vizkozite, solvent, medium, toner, unitIndex, hasSolventButtons } = hasData;
+                    
+                    // Renk çubuğunu oluştur
+                    let colorBarHtml = '';
+                    if (renk && renk !== '-') {
+                        const colorImage = createColorBar(renk.toLowerCase());
+                        colorBarHtml = `<div class="color-bar-integrated" style="background-image: url('${colorImage}'); background-size: cover; background-position: center; background-repeat: no-repeat;"></div>`;
+                    }
+                    
+                    unitsHtml += `
+                        <div class="unit unit-card" draggable="true" data-unit="${unitNumber}" data-original-index="${unitIndex}">
+                            ${colorBarHtml}
+                            <div class="unit-number">Ünite ${unitNumber}</div>
+                            <div class="unit-data">
+                            <div class="data-category">
+                                <div class="category-label">Renk</div>
+                                <div class="category-value ${getValueClass(renk)}">${renk}</div>
+                            </div>
+                            <div class="data-category">
+                                <div class="category-label">Silindir</div>
+                                <div class="category-value ${getValueClass(silindir)}">${silindir}</div>
+                            </div>
+                            <div class="data-category">
+                                <div class="category-label">Mürekkep</div>
+                                <div class="category-value ${getValueClass(murekkep)}">${murekkep}</div>
+                            </div>
+                            <div class="data-category">
+                                <div class="category-label">Vizkozite</div>
+                                <div class="category-value ${getValueClass(vizkozite)}">${vizkozite}</div>
+                            </div>
+                            <div class="data-category">
+                                <div class="solvent-label-control">
+                                    ${hasSolventButtons ? '<button class="solvent-btn-side" onclick="adjustSolvent(this, \'down\')">◄</button>' : ''}
+                                    <div class="category-label">Solvent</div>
+                                    ${hasSolventButtons ? '<button class="solvent-btn-side" onclick="adjustSolvent(this, \'up\')">►</button>' : ''}
+                                </div>
+                                <div class="category-value ${getValueClass(solvent)}" data-solvent="${solvent}">${solvent}%</div>
+                            </div>
+                            <div class="data-category">
+                                <div class="category-label">Medium</div>
+                                <div class="category-value ${getValueClass(medium)}">${medium}</div>
+                            </div>
+                            <div class="data-category">
+                                <div class="category-label">Toner</div>
+                                <div class="category-value ${getValueClass(toner)}">${formatToner(toner)}</div>
+                            </div>
+                            <div class="data-category">
+                                <div class="category-label">DR. Blade</div>
+                                <select class="blade-select" onchange="this.style.background='#e9ecef'; this.style.border='1px solid #ddd';">
+                                    <option value="">Seçiniz</option>
+                                    <option value="DEATWYLER">DEATWYLER</option>
+                                    <option value="SWEED CUT">SWEED CUT</option>
+                                </select>
+                            </div>
+                            <div class="data-category">
+                                <div class="category-label">DR. Blade Açısı</div>
+                                <div class="blade-angle-container">
+                                    <select class="blade-angle-select" onchange="this.style.background='#e9ecef'; this.style.border='1px solid #ddd';">
+                                        <option value="">X</option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                        <option value="5">5</option>
+                                    </select>
+                                    <span class="blade-separator">-</span>
+                                    <select class="blade-angle-select" onchange="this.style.background='#e9ecef'; this.style.border='1px solid #ddd';">
+                                        <option value="">Y</option>
+                                        <option value="A">A</option>
+                                        <option value="B">B</option>
+                                        <option value="C">C</option>
+                                        <option value="D">D</option>
+                                        <option value="E">E</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                } else {
+                    // Boş slot
+                    unitsHtml += `
+                        <div class="unit-slot" data-slot="${unitNumber}">
+                            <div class="slot-number">Ünite ${unitNumber}</div>
+                            <div class="slot-placeholder">Boş Slot</div>
+                        </div>
+                    `;
+                }
+            }
+            
+            // Genel kartını ekle
+            unitsHtml += `
+                <div class="unit general-card">
+                    <div class="unit-number">Genel</div>
+                    <div class="unit-data">
+                        <div class="data-category">
+                            <div class="category-label">İşin Adı</div>
+                            <div class="category-value ${getValueClass(jobData.is_adi)}">${jobData.is_adi || '-'}</div>
+                        </div>
+                        <div class="data-category">
+                            <div class="category-label">Silindir Çevresi</div>
+                            <div class="category-value">${jobData.silindir_cevresi ? jobData.silindir_cevresi + ' mm' : '-'}</div>
+                        </div>
+                        <div class="data-category">
+                            <div class="category-label">Karton</div>
+                            <div class="category-value ${getValueClass(jobData.karton)}">${jobData.karton || '-'}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            unitsContainer.innerHTML = unitsHtml;
+            
+            // Drag & Drop event'lerini ekle
+            initDragAndDrop();
+        }
+
+        // Renk kutucuklarını oluştur
+        function createColorChips(renkString) {
+            if (!renkString || renkString === '-') {
+                return '<div class="color-chips"><div class="color-chip color-default">-</div></div>';
+            }
+            
+            // Renkleri ayır (virgül, boşluk, tire ile ayrılmış olabilir)
+            const colors = renkString.split(/[,;\s-]+/).filter(color => color.trim() !== '');
+            
+            if (colors.length === 0) {
+                return '<div class="color-chips"><div class="color-chip color-default">-</div></div>';
+            }
+            
+            let chipsHtml = '<div class="color-chips">';
+            
+            colors.forEach(color => {
+                const cleanColor = color.trim().toLowerCase();
+                const colorClass = getColorClass(cleanColor);
+                const displayText = getColorDisplayText(cleanColor);
+                
+                chipsHtml += `<div class="color-chip ${colorClass}" title="${cleanColor}">${displayText}</div>`;
+            });
+            
+            chipsHtml += '</div>';
+            return chipsHtml;
+        }
+
+        // Canvas ile tüm renkleri oluştur
+        function createColorBar(colorName) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 170;
+            canvas.height = 20;
+            const ctx = canvas.getContext('2d');
+            
+            // Renk haritası
+            const colorMap = {
+                'black': '#2c2c2c',
+                'siyah': '#2c2c2c',
+                'green': '#4caf50',
+                'yeşil': '#4caf50',
+                'grey': '#9e9e9e',
+                'gray': '#9e9e9e',
+                'gri': '#9e9e9e',
+                'yellow': '#ffeb3b',
+                'sarı': '#ffeb3b',
+                'cyan': '#00bcd4',
+                'mavi': '#00bcd4',
+                'magenta': '#e91e63',
+                'kırmızı': '#e91e63',
+                'red': '#f44336',
+                'kirmizi': '#f44336'
+            };
+            
+            if (colorName === 'gold') {
+                // Altın gradient
+                const gradient = ctx.createLinearGradient(0, 0, 170, 20);
+                gradient.addColorStop(0, '#FFD700');
+                gradient.addColorStop(0.2, '#FFA500');
+                gradient.addColorStop(0.4, '#FFD700');
+                gradient.addColorStop(0.6, '#DAA520');
+                gradient.addColorStop(0.8, '#B8860B');
+                gradient.addColorStop(1, '#FFD700');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, 170, 20);
+                
+                // Parıltı efekti
+                const shineGradient = ctx.createLinearGradient(0, 0, 170, 0);
+                shineGradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+                shineGradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.3)');
+                shineGradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.3)');
+                shineGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                ctx.fillStyle = shineGradient;
+                ctx.fillRect(0, 0, 170, 20);
+                
+            } else if (colorName === 'silver') {
+                // Gümüş gradient
+                const gradient = ctx.createLinearGradient(0, 0, 170, 20);
+                gradient.addColorStop(0, '#C0C0C0');
+                gradient.addColorStop(0.2, '#E6E6E6');
+                gradient.addColorStop(0.4, '#C0C0C0');
+                gradient.addColorStop(0.6, '#A9A9A9');
+                gradient.addColorStop(0.8, '#808080');
+                gradient.addColorStop(1, '#C0C0C0');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, 170, 20);
+                
+                // Parıltı efekti
+                const shineGradient = ctx.createLinearGradient(0, 0, 170, 0);
+                shineGradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+                shineGradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.4)');
+                shineGradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.4)');
+                shineGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                ctx.fillStyle = shineGradient;
+                ctx.fillRect(0, 0, 170, 20);
+                
+            } else if (colorName === 'bronze' || colorName === 'bronz') {
+                // Bronz gradient
+                const gradient = ctx.createLinearGradient(0, 0, 170, 20);
+                gradient.addColorStop(0, '#CD7F32');
+                gradient.addColorStop(0.2, '#DAA520');
+                gradient.addColorStop(0.4, '#CD7F32');
+                gradient.addColorStop(0.6, '#B8860B');
+                gradient.addColorStop(0.8, '#8B4513');
+                gradient.addColorStop(1, '#CD7F32');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, 170, 20);
+                
+                // Parıltı efekti
+                const shineGradient = ctx.createLinearGradient(0, 0, 170, 0);
+                shineGradient.addColorStop(0, 'rgba(255, 215, 0, 0)');
+                shineGradient.addColorStop(0.3, 'rgba(255, 215, 0, 0.2)');
+                shineGradient.addColorStop(0.7, 'rgba(255, 215, 0, 0.2)');
+                shineGradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+                ctx.fillStyle = shineGradient;
+                ctx.fillRect(0, 0, 170, 20);
+                
+            } else {
+                // Normal renkler için düz renk
+                const color = colorMap[colorName] || '#f0f0f0';
+                ctx.fillStyle = color;
+                ctx.fillRect(0, 0, 170, 20);
+            }
+            
+            return canvas.toDataURL();
+        }
+
+        // Ünite rengini belirle (varnish hariç)
+        function getUnitColor(renkString) {
+            if (!renkString || renkString === '-') {
+                return null; // Varsayılan renk yok
+            }
+            
+            // Varnish kontrolü - varnish olanları boyama
+            if (renkString.toLowerCase().includes('varnish')) {
+                return null; // Varnish boyanmaz
+            }
+            
+            // Renkleri ayır
+            const colors = renkString.split(/[,;\s-]+/).filter(color => color.trim() !== '');
+            
+            if (colors.length === 0) {
+                return null;
+            }
+            
+            // İlk rengi al
+            const firstColor = colors[0].trim().toLowerCase();
+            
+            const colorMap = {
+                'black': '#2c2c2c',
+                'siyah': '#2c2c2c',
+                'green': '#4caf50',
+                'yeşil': '#4caf50',
+                'grey': '#9e9e9e',
+                'gray': '#9e9e9e',
+                'gri': '#9e9e9e',
+                'yellow': '#ffeb3b',
+                'sarı': '#ffeb3b',
+                'cyan': '#00bcd4',
+                'mavi': '#00bcd4',
+                'magenta': '#e91e63',
+                'kırmızı': '#e91e63',
+                'red': '#f44336',
+                'kirmizi': '#f44336',
+                'gold': 'linear-gradient(135deg, #ffd700 0%, #ffed4e 20%, #ffd700 40%, #daa520 60%, #b8860b 80%, #ffd700 100%)',
+                'silver': 'linear-gradient(135deg, #e6e6e6 0%, #f5f5f5 15%, #d3d3d3 30%, #c0c0c0 45%, #a9a9a9 60%, #808080 75%, #696969 90%, #c0c0c0 100%)',
+                'bronze': 'linear-gradient(135deg, #cd7f32 0%, #daa520 25%, #cd7f32 50%, #8b4513 75%, #cd7f32 100%)',
+                'bronz': 'linear-gradient(135deg, #cd7f32 0%, #daa520 25%, #cd7f32 50%, #8b4513 75%, #cd7f32 100%)'
+            };
+            
+            return colorMap[firstColor] || null;
+        }
+
+        // Renk adına göre CSS class'ı döndür
+        function getColorClass(colorName) {
+            const colorMap = {
+                'black': 'color-black',
+                'siyah': 'color-black',
+                'green': 'color-green',
+                'yeşil': 'color-green',
+                'grey': 'color-grey',
+                'gray': 'color-gray',
+                'gri': 'color-grey',
+                'yellow': 'color-yellow',
+                'sarı': 'color-yellow',
+                'cyan': 'color-cyan',
+                'mavi': 'color-cyan',
+                'magenta': 'color-magenta',
+                'kırmızı': 'color-magenta',
+                'red': 'color-red',
+                'kirmizi': 'color-red',
+                'blue': 'color-blue',
+                'mavi': 'color-blue',
+                'white': 'color-white',
+                'beyaz': 'color-white',
+                'orange': 'color-orange',
+                'turuncu': 'color-orange',
+                'purple': 'color-purple',
+                'mor': 'color-purple',
+                'pink': 'color-pink',
+                'pembe': 'color-pink',
+                'brown': 'color-brown',
+                'kahverengi': 'color-brown'
+            };
+            
+            return colorMap[colorName] || 'color-default';
+        }
+
+        // Renk adına göre görüntülenecek metni döndür
+        function getColorDisplayText(colorName) {
+            const textMap = {
+                'black': 'B',
+                'siyah': 'B',
+                'green': 'G',
+                'yeşil': 'G',
+                'grey': 'Gr',
+                'gray': 'Gr',
+                'gri': 'Gr',
+                'yellow': 'Y',
+                'sarı': 'Y',
+                'cyan': 'C',
+                'mavi': 'C',
+                'magenta': 'M',
+                'kırmızı': 'M',
+                'red': 'R',
+                'kirmizi': 'R',
+                'blue': 'B',
+                'mavi': 'B',
+                'white': 'W',
+                'beyaz': 'W',
+                'orange': 'O',
+                'turuncu': 'O',
+                'purple': 'P',
+                'mor': 'P',
+                'pink': 'Pk',
+                'pembe': 'Pk',
+                'brown': 'Br',
+                'kahverengi': 'Br'
+            };
+            
+            return textMap[colorName] || colorName.charAt(0).toUpperCase();
+        }
+
+        // Loading göster/gizle
+        function showLoading(show) {
+            if (show) {
+                loading.classList.add('show');
+                searchBtn.disabled = true;
+                searchBtn.textContent = 'Yükleniyor...';
+            } else {
+                loading.classList.remove('show');
+                searchBtn.disabled = false;
+                searchBtn.textContent = 'Sorgula';
+            }
+        }
+
+        // Hata mesajı göster
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+        }
+
+        // Hata mesajını gizle
+        function hideError() {
+            errorMessage.classList.remove('show');
+        }
+
+        // Sonuçları göster
+        function showResults() {
+            jobInfo.classList.add('show');
+            machineDiagram.classList.add('show');
+        }
+
+        // Sonuçları gizle
+        function hideResults() {
+            jobInfo.classList.remove('show');
+            machineDiagram.classList.remove('show');
+        }
+
+        // Sayfa yüklendiğinde focus
+        window.addEventListener('load', function() {
+            stokKoduInput.focus();
+        });
+
+        // Enter tuşu ile arama
+        stokKoduInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchForm.dispatchEvent(new Event('submit'));
+            }
+        });
+
+        // Solvent ayarlama fonksiyonu
+        function adjustSolvent(button, direction) {
+            const container = button.closest('.data-category');
+            const valueElement = container.querySelector('.category-value');
+            const currentValue = valueElement.dataset.solvent;
+            
+            // Format: "EAL 70; EAC 30%" veya "EAL 70 ; EAC 30" gibi
+            const regex = /EAL\s*(\d+)\s*[;,]\s*EAC\s*(\d+)/i;
+            const match = currentValue.match(regex);
+            
+            if (match) {
+                let eal = parseInt(match[1]);
+                let eac = parseInt(match[2]);
+                
+                // Yukarı/Aşağı ayarlama
+                if (direction === 'up') {
+                    eal = Math.min(100, eal + 10);
+                    eac = Math.max(0, eac - 10);
+                } else {
+                    eal = Math.max(0, eal - 10);
+                    eac = Math.min(100, eac + 10);
+                }
+                
+                // Yeni değeri güncelle
+                const newValue = `EAL ${eal}; EAC ${eac}`;
+                valueElement.dataset.solvent = newValue;
+                valueElement.textContent = newValue + '%';
+            }
+        }
+
+        // Drag & Drop Fonksiyonları
+        let draggedElement = null;
+
+        function initDragAndDrop() {
+            const units = document.querySelectorAll('.unit[draggable="true"]');
+            const slots = document.querySelectorAll('.unit-slot');
+            
+            units.forEach(unit => {
+                unit.addEventListener('dragstart', handleDragStart);
+                unit.addEventListener('dragover', handleDragOver);
+                unit.addEventListener('dragleave', handleDragLeave);
+                unit.addEventListener('drop', handleDrop);
+                unit.addEventListener('dragend', handleDragEnd);
+            });
+            
+            slots.forEach(slot => {
+                slot.addEventListener('dragover', handleSlotDragOver);
+                slot.addEventListener('dragleave', handleSlotDragLeave);
+                slot.addEventListener('drop', handleSlotDrop);
+            });
+        }
+
+        function handleDragStart(e) {
+            draggedElement = this;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.innerHTML);
+        }
+
+        function handleDragOver(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            
+            e.dataTransfer.dropEffect = 'move';
+            
+            // Hover efekti ekle
+            if (this.classList.contains('unit') && !this.classList.contains('general-card') && this !== draggedElement) {
+                this.classList.add('drag-over');
+            }
+            
+            return false;
+        }
+        
+        function handleDragLeave(e) {
+            this.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+            
+            this.classList.remove('drag-over');
+
+            if (draggedElement !== this && this.classList.contains('unit') && !this.classList.contains('general-card')) {
+                // Kartları yer değiştir (numaralarını da değiştir)
+                swapCardsWithNumbers(draggedElement, this);
+            }
+
+            return false;
+        }
+
+        function handleDragEnd(e) {
+            // Tüm dragging ve drag-over sınıflarını temizle
+            const allUnits = document.querySelectorAll('.unit, .unit-slot');
+            allUnits.forEach(unit => {
+                unit.classList.remove('dragging');
+                unit.classList.remove('drag-over');
+            });
+        }
+
+        function handleSlotDragOver(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            
+            e.dataTransfer.dropEffect = 'move';
+            this.classList.add('drag-over');
+            
+            return false;
+        }
+        
+        function handleSlotDragLeave(e) {
+            this.classList.remove('drag-over');
+        }
+        
+        function handleSlotDrop(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+            
+            this.classList.remove('drag-over');
+            
+            if (draggedElement && draggedElement.classList.contains('unit-card')) {
+                // Tüm class'ları temizle
+                draggedElement.classList.remove('dragging');
+                
+                // Slot numarasını al (bu sabit kalacak)
+                const targetSlotNumber = this.dataset.slot;
+                
+                // Kart HTML'ini al ve ünite numarasını güncelle
+                const parser = new DOMParser();
+                const cardDoc = parser.parseFromString(draggedElement.outerHTML, 'text/html');
+                const cardElement = cardDoc.querySelector('.unit');
+                
+                // Ünite numarasını güncelle
+                const unitNumberElement = cardElement.querySelector('.unit-number');
+                if (unitNumberElement) {
+                    unitNumberElement.textContent = `Ünite ${targetSlotNumber}`;
+                }
+                
+                // Data-unit'i güncelle
+                cardElement.dataset.unit = targetSlotNumber;
+                
+                const updatedCardHTML = cardElement.outerHTML;
+                
+                // Kartın bulunduğu yeri boş slot yap (eski slot numarasını koru)
+                const sourceSlotNumber = draggedElement.dataset.unit;
+                const newSlotHTML = `
+                    <div class="unit-slot" data-slot="${sourceSlotNumber}">
+                        <div class="slot-number">Ünite ${sourceSlotNumber}</div>
+                        <div class="slot-placeholder">Boş Slot</div>
+                    </div>
+                `;
+                
+                // Değiştir
+                this.outerHTML = updatedCardHTML;
+                draggedElement.outerHTML = newSlotHTML;
+                
+                // Event listener'ları yeniden başlat
+                setTimeout(() => {
+                    initDragAndDrop();
+                    // Tüm class'ları tekrar temizle
+                    document.querySelectorAll('.unit, .unit-slot').forEach(el => {
+                        el.classList.remove('dragging', 'drag-over');
+                    });
+                }, 10);
+            }
+            
+            return false;
+        }
+
+        function swapCardsWithNumbers(card1, card2) {
+            // Tüm class'ları temizle
+            card1.classList.remove('dragging');
+            card2.classList.remove('dragging');
+            
+            // Her kartın pozisyonundaki slot numarasını al
+            const card1Number = card1.dataset.unit;
+            const card2Number = card2.dataset.unit;
+            
+            // Kartların içeriklerini değiştir
+            const parser = new DOMParser();
+            
+            // Card1'in içeriğini Card2'nin numarasıyla güncelle
+            const card1Doc = parser.parseFromString(card1.outerHTML, 'text/html');
+            const card1Element = card1Doc.querySelector('.unit');
+            const card1UnitNumber = card1Element.querySelector('.unit-number');
+            if (card1UnitNumber) {
+                card1UnitNumber.textContent = `Ünite ${card2Number}`;
+            }
+            card1Element.dataset.unit = card2Number;
+            
+            // Card2'nin içeriğini Card1'in numarasıyla güncelle
+            const card2Doc = parser.parseFromString(card2.outerHTML, 'text/html');
+            const card2Element = card2Doc.querySelector('.unit');
+            const card2UnitNumber = card2Element.querySelector('.unit-number');
+            if (card2UnitNumber) {
+                card2UnitNumber.textContent = `Ünite ${card1Number}`;
+            }
+            card2Element.dataset.unit = card1Number;
+            
+            // Değiştir
+            card1.outerHTML = card2Element.outerHTML;
+            card2.outerHTML = card1Element.outerHTML;
+            
+            // Event listener'ları yeniden başlat
+            setTimeout(() => {
+                initDragAndDrop();
+                // Class'ları tekrar temizle
+                document.querySelectorAll('.unit, .unit-slot').forEach(el => {
+                    el.classList.remove('dragging', 'drag-over');
+                });
+            }, 10);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+export { default as Dashboard } from './Dashboard';
+export { default as LoginPage } from './LoginPage';
+export { default as RegisterPage } from './RegisterPage';
+export { default as AdminPanel } from './AdminPanel';
+export { default as DatabaseAdmin } from './DatabaseAdmin';
+export { default as SettingsPage } from './SettingsPage'; 

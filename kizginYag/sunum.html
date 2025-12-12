@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kızgın Yağ Sistemi - Makine Bazlı Enerji Tüketim Ölçüm Projesi</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .slide {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-align: center;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 15px;
+        }
+
+        h2 {
+            color: #764ba2;
+            font-size: 2em;
+            margin: 30px 0 20px 0;
+            padding-left: 15px;
+            border-left: 5px solid #667eea;
+        }
+
+        h3 {
+            color: #555;
+            font-size: 1.5em;
+            margin: 25px 0 15px 0;
+        }
+
+        .highlight {
+            background: linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            margin: 5px;
+        }
+
+        .badge-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .badge-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .badge-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .badge-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .comparison-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        .comparison-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .comparison-table tr:nth-child(even) {
+            background: #f9fafb;
+        }
+
+        .comparison-table tr:hover {
+            background: #f3f4f6;
+        }
+
+        .cost-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .cost-box h3 {
+            color: white;
+            margin-bottom: 15px;
+        }
+
+        .cost-amount {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .feature-card {
+            background: #f9fafb;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            transition: transform 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .feature-card h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .pros-cons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .pros, .cons {
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .pros {
+            background: #d1fae5;
+            border-left: 4px solid #10b981;
+        }
+
+        .cons {
+            background: #fee2e2;
+            border-left: 4px solid #ef4444;
+        }
+
+        .pros h4, .cons h4 {
+            margin-bottom: 15px;
+        }
+
+        .pros ul, .cons ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .pros li:before {
+            content: "✅ ";
+            margin-right: 8px;
+        }
+
+        .cons li:before {
+            content: "❌ ";
+            margin-right: 8px;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 30px;
+            margin: 20px 0;
+        }
+
+        .timeline:before {
+            content: "";
+            position: absolute;
+            left: 10px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #667eea;
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 30px;
+            padding-left: 30px;
+        }
+
+        .timeline-item:before {
+            content: "";
+            position: absolute;
+            left: -25px;
+            top: 5px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #667eea;
+            border: 3px solid white;
+            box-shadow: 0 0 0 3px #667eea;
+        }
+
+        .tech-spec {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .tech-spec table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .tech-spec td {
+            padding: 8px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .tech-spec td:first-child {
+            font-weight: bold;
+            color: #667eea;
+            width: 40%;
+        }
+
+        .recommended {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .communication-box {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .communication-box h3 {
+            color: white;
+            margin-bottom: 15px;
+        }
+
+        .protocol-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .protocol-item {
+            background: rgba(255,255,255,0.2);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: white;
+            margin-top: 30px;
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+            .slide {
+                page-break-after: always;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Slide 1: Başlık -->
+        <div class="slide">
+            <h1>🔥 Kızgın Yağ Sistemi</h1>
+            <h2 style="text-align: center; border: none; padding: 0;">Makine Bazlı Enerji Tüketim Ölçüm Projesi</h2>
+            <div style="text-align: center; margin-top: 30px;">
+                <span class="badge badge-primary">5 Makine</span>
+                <span class="badge badge-success">Kalorimetre Çözümü</span>
+                <span class="badge badge-warning">Modbus Haberleşme</span>
+            </div>
+        </div>
+
+        <!-- Slide 2: Mevcut Durum vs Hedef -->
+        <div class="slide">
+            <h2>📊 Mevcut Durum vs Hedef</h2>
+            
+            <div class="pros-cons">
+                <div class="cons">
+                    <h4>❌ Mevcut Durum</h4>
+                    <ul>
+                        <li>1 adet kızgın yağ kazanı (doğalgazlı brülör)</li>
+                        <li>5 adet makine fırını ısıtılıyor</li>
+                        <li>Sadece toplam doğalgaz faturası görülüyor</li>
+                        <li>Makine bazlı tüketim bilgisi YOK</li>
+                        <li>Hangi makine ne kadar tüketiyor bilinmiyor</li>
+                    </ul>
+                </div>
+                
+                <div class="pros">
+                    <h4>✅ Hedef</h4>
+                    <ul>
+                        <li>Her makine için ayrı enerji tüketim ölçümü</li>
+                        <li>Makine bazlı raporlama (günlük, haftalık, aylık)</li>
+                        <li>Fatura geldiğinde: "1. makine X kWh, 2. makine Y kWh..."</li>
+                        <li>İş bazlı tüketim analizi</li>
+                        <li>Gerçek zamanlı izleme ve alarm</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Kalorimetre Çözümü -->
+        <div class="slide">
+            <h2>🎯 Önerilen Çözüm: Kalorimetre</h2>
+            
+            <div class="recommended">
+                ⭐ HABERLEŞMELİ KALORİMETRE (Modbus RTU/TCP) ⭐
+            </div>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>🔌 Entegre Çözüm</h4>
+                    <p>1 kalorimetre = 1 akış ölçer + 2 sıcaklık sensörü</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>📊 Direkt Enerji Çıkışı</h4>
+                    <p>kW ve kWh değerleri hazır (hesaplama gerekmez)</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>📡 Modbus Haberleşme</h4>
+                    <p>RS485 veya Ethernet üzerinden veri okuma</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>🎯 Yüksek Hassasiyet</h4>
+                    <p>±0.5% - ±1% enerji ölçüm hassasiyeti</p>
+                </div>
+            </div>
+
+            <h3>Kalorimetre Nasıl Çalışır?</h3>
+            <div class="tech-spec">
+                <ol style="padding-left: 20px; line-height: 2;">
+                    <li><strong>Akış Ölçer:</strong> Kızgın yağın akış hızını ölçer (L/min, m³/h)</li>
+                    <li><strong>Giriş Sıcaklık Sensörü:</strong> Kızgın yağın giriş sıcaklığını ölçer (°C)</li>
+                    <li><strong>Çıkış Sıcaklık Sensörü:</strong> Kızgın yağın çıkış sıcaklığını ölçer (°C)</li>
+                    <li><strong>İç Hesaplama:</strong> Cihaz içinde otomatik olarak enerji hesaplar</li>
+                    <li><strong>Modbus Çıkış:</strong> Tüm değerleri Modbus üzerinden verir</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- Slide 4: Haberleşme Detayları -->
+        <div class="slide">
+            <h2>📡 Haberleşme ve Veri Toplama</h2>
+            
+            <div class="communication-box">
+                <h3>Modbus Haberleşme Protokolleri</h3>
+                <div class="protocol-list">
+                    <div class="protocol-item">
+                        <strong>Modbus RTU</strong><br>
+                        RS485 Seri İletişim<br>
+                        <small>Uzun mesafe, güvenilir</small>
+                    </div>
+                    <div class="protocol-item">
+                        <strong>Modbus TCP/IP</strong><br>
+                        Ethernet Üzerinden<br>
+                        <small>Hızlı, network entegrasyonu</small>
+                    </div>
+                    <div class="protocol-item">
+                        <strong>4-20 mA</strong><br>
+                        Analog Sinyal<br>
+                        <small>Opsiyonel, basit sistemler</small>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Okunan Değerler (Modbus Register'larından)</h3>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Değer</th>
+                        <th>Açıklama</th>
+                        <th>Birim</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Akış</strong></td>
+                        <td>Kızgın yağ akış hızı</td>
+                        <td>L/min veya m³/h</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Giriş Sıcaklığı</strong></td>
+                        <td>Kızgın yağ giriş sıcaklığı</td>
+                        <td>°C</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Çıkış Sıcaklığı</strong></td>
+                        <td>Kızgın yağ çıkış sıcaklığı</td>
+                        <td>°C</td>
+                    </tr>
+                    <tr>
+                        <td><strong>ΔT (Sıcaklık Farkı)</strong></td>
+                        <td>Giriş - Çıkış sıcaklık farkı</td>
+                        <td>°C</td>
+                    </tr>
+                    <tr style="background: #dbeafe;">
+                        <td><strong>⭐ Güç (Power)</strong></td>
+                        <td>Anlık enerji tüketimi</td>
+                        <td>kW</td>
+                    </tr>
+                    <tr style="background: #dbeafe;">
+                        <td><strong>⭐ Enerji (Energy)</strong></td>
+                        <td>Kümülatif enerji tüketimi</td>
+                        <td>kWh</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Veri Toplama Mimarisi</h3>
+            <div class="tech-spec">
+                <p><strong>Akış:</strong> Kalorimetreler → Modbus RTU/TCP → PLC/Data Logger → SQL Veritabanı → Dashboard</p>
+                <p><strong>Ölçüm Periyodu:</strong> Her 1-5 saniye (anlık), Her 1 dakika (kayıt)</p>
+                <p><strong>Raporlama:</strong> Günlük, haftalık, aylık (fatura dönemi)</p>
+            </div>
+        </div>
+
+        <!-- Slide 5: Alternatif Çözümler -->
+        <div class="slide">
+            <h2>🔄 Alternatif Çözümler</h2>
+            
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Özellik</th>
+                        <th>Kalorimetre (Önerilen)</th>
+                        <th>Ayrı Sensörler</th>
+                        <th>Merkezi Ölçüm</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Cihaz Sayısı</strong></td>
+                        <td>5 adet</td>
+                        <td>15 adet (5 akış + 10 sıcaklık)</td>
+                        <td>1 akış + 10 sıcaklık</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Montaj Noktası</strong></td>
+                        <td>5 nokta</td>
+                        <td>15 nokta</td>
+                        <td>11 nokta</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Kablolama</strong></td>
+                        <td>Daha az</td>
+                        <td>Daha fazla</td>
+                        <td>Orta</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Hassasiyet</strong></td>
+                        <td>±0.5% - ±1%</td>
+                        <td>±1% - ±2%</td>
+                        <td>±2% - ±5% (oranlama)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Enerji Çıkışı</strong></td>
+                        <td>Direkt (kW/kWh)</td>
+                        <td>Hesaplama gerekir</td>
+                        <td>Oranlama ile tahmin</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Haberleşme</strong></td>
+                        <td>Modbus RTU/TCP</td>
+                        <td>Modbus RTU/TCP</td>
+                        <td>Modbus RTU/TCP</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Arıza Riski</strong></td>
+                        <td>Düşük (entegre)</td>
+                        <td>Yüksek (ayrı sensörler)</td>
+                        <td>Orta</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Maliyet (5 Makine)</strong></td>
+                        <td>~330.000 TL</td>
+                        <td>~240.000 TL</td>
+                        <td>~150.000 TL</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="pros-cons">
+                <div class="pros">
+                    <h4>✅ Kalorimetre Avantajları</h4>
+                    <ul>
+                        <li>Direkt enerji çıkışı (hesaplama gerekmez)</li>
+                        <li>Daha az montaj noktası</li>
+                        <li>Daha az kablolama</li>
+                        <li>Yüksek hassasiyet</li>
+                        <li>Entegre çözüm, daha az arıza</li>
+                        <li>Modbus haberleşme ile kolay entegrasyon</li>
+                    </ul>
+                </div>
+                
+                <div class="cons">
+                    <h4>❌ Kalorimetre Dezavantajları</h4>
+                    <ul>
+                        <li>Biraz daha yüksek maliyet</li>
+                        <li>Montaj için giriş-çıkış hatları yakın olmalı</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Maliyet Analizi -->
+        <div class="slide">
+            <h2>💰 Maliyet Analizi</h2>
+            
+            <div class="cost-box">
+                <h3>Kalorimetre Çözümü (Önerilen)</h3>
+                <div class="cost-amount">330.000 TL</div>
+                <p>5 adet Haberleşmeli Kalorimetre + Altyapı + Yazılım</p>
+            </div>
+
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Kalem</th>
+                        <th>Adet</th>
+                        <th>Birim Fiyat</th>
+                        <th>Toplam</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Kalorimetre (Modbus RTU/TCP)</strong></td>
+                        <td>5</td>
+                        <td>50.000 TL</td>
+                        <td>250.000 TL</td>
+                    </tr>
+                    <tr>
+                        <td>Veri Toplama Altyapısı (PLC/Data Logger)</td>
+                        <td>1</td>
+                        <td>50.000 TL</td>
+                        <td>50.000 TL</td>
+                    </tr>
+                    <tr>
+                        <td>Yazılım Geliştirme (Veri toplama + Dashboard)</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>30.000 TL</td>
+                    </tr>
+                    <tr style="background: #dbeafe; font-weight: bold;">
+                        <td>TOPLAM</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>330.000 TL</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Alternatif Çözüm Maliyetleri</h3>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>Ayrı Sensörler</h4>
+                    <div style="font-size: 1.5em; color: #667eea; font-weight: bold; margin: 10px 0;">240.000 TL</div>
+                    <p>5 akış ölçer + 10 sıcaklık sensörü</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>Merkezi Ölçüm</h4>
+                    <div style="font-size: 1.5em; color: #667eea; font-weight: bold; margin: 10px 0;">150.000 TL</div>
+                    <p>1 akış ölçer + 10 sıcaklık (oranlama)</p>
+                </div>
+            </div>
+
+            <div class="tech-spec">
+                <p><strong>Not:</strong> Fiyatlar yaklaşık değerlerdir. Marka, model ve kurulum zorluğuna göre değişebilir. Ekonomik segment kalorimetrelerle maliyet ~250.000 TL'ye düşebilir.</p>
+            </div>
+        </div>
+
+        <!-- Slide 7: Teknik Özellikler -->
+        <div class="slide">
+            <h2>🔧 Teknik Özellikler</h2>
+            
+            <h3>Kalorimetre Teknik Özellikleri</h3>
+            <div class="tech-spec">
+                <table>
+                    <tr>
+                        <td>Akış Ölçüm Aralığı</td>
+                        <td>0-200 L/min (hat çapına göre ayarlanır)</td>
+                    </tr>
+                    <tr>
+                        <td>Sıcaklık Aralığı</td>
+                        <td>-40°C ile +400°C</td>
+                    </tr>
+                    <tr>
+                        <td>Basınç Aralığı</td>
+                        <td>0-40 bar</td>
+                    </tr>
+                    <tr>
+                        <td>Hassasiyet (Enerji)</td>
+                        <td>±0.5% - ±1% okuma değeri</td>
+                    </tr>
+                    <tr>
+                        <td>Hassasiyet (Akış)</td>
+                        <td>±1% okuma değeri</td>
+                    </tr>
+                    <tr>
+                        <td>Hassasiyet (Sıcaklık)</td>
+                        <td>±0.1°C</td>
+                    </tr>
+                    <tr>
+                        <td>Çıkış Sinyalleri</td>
+                        <td>Modbus RTU, Modbus TCP/IP, 4-20 mA (opsiyonel)</td>
+                    </tr>
+                    <tr>
+                        <td>Besleme</td>
+                        <td>24V DC veya 220V AC</td>
+                    </tr>
+                    <tr>
+                        <td>Bağlantı</td>
+                        <td>Flanşlı (DN15, DN20, DN25, DN32, DN40, DN50, DN65, DN80, DN100)</td>
+                    </tr>
+                    <tr>
+                        <td>Boru Çapı Uyumu</td>
+                        <td>✅ 2 inç (DN50) ve 4 inç (DN100) standart olarak mevcuttur</td>
+                    </tr>
+                </table>
+            </div>
+
+            <h3>Önerilen Markalar</h3>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>Premium</h4>
+                    <p><strong>Kamstrup:</strong> MULTICAL 402/403<br>
+                    <strong>Landis+Gyr:</strong> ULTRAHEAT T550<br>
+                    <small>60.000 - 80.000 TL/adet</small></p>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>Orta Segment (Önerilen)</h4>
+                    <p><strong>Endress+Hauser:</strong> Promass 80<br>
+                    <strong>Siemens:</strong> SITRANS F M MAG 3100<br>
+                    <strong>Krohne:</strong> OPTIFLUX 2000<br>
+                    <small>40.000 - 60.000 TL/adet</small></p>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>Ekonomik</h4>
+                    <p><strong>Yerli:</strong> Teknokontrol, Tekniker<br>
+                    <small>30.000 - 45.000 TL/adet</small></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Kurulum Planı -->
+        <div class="slide">
+            <h2>📅 Kurulum Planı</h2>
+            
+            <div class="timeline">
+                <div class="timeline-item">
+                    <h3>Faz 1: Hazırlık ve Planlama (1-2 Hafta)</h3>
+                    <ul>
+                        <li>Fiziksel ölçümler (hat çapı, basınç, sıcaklık)</li>
+                        <li>P&ID ve elektrik şeması hazırlama</li>
+                        <li>Tedarikçi seçimi ve teklif alma</li>
+                        <li>İzinler ve onaylar</li>
+                    </ul>
+                </div>
+                
+                <div class="timeline-item">
+                    <h3>Faz 2: Pilot Uygulama - 1 Makine (2-3 Hafta)</h3>
+                    <ul>
+                        <li>1 makine için kalorimetre kurulumu</li>
+                        <li>Modbus haberleşme testi</li>
+                        <li>Veri toplama yazılımı geliştirme</li>
+                        <li>Test ve doğrulama (1 hafta sürekli çalışma)</li>
+                    </ul>
+                </div>
+                
+                <div class="timeline-item">
+                    <h3>Faz 3: Tam Kurulum - 4 Makine (3-4 Hafta)</h3>
+                    <ul>
+                        <li>Kalan 4 makine için kalorimetre kurulumu</li>
+                        <li>Sistem entegrasyonu</li>
+                        <li>Toplam doğrulama (kazan çıkışı ile karşılaştırma)</li>
+                    </ul>
+                </div>
+                
+                <div class="timeline-item">
+                    <h3>Faz 4: Raporlama ve Optimizasyon (2-3 Hafta)</h3>
+                    <ul>
+                        <li>Dashboard geliştirme</li>
+                        <li>Raporlama sistemi (günlük, haftalık, aylık)</li>
+                        <li>Alarm ve uyarı sistemi</li>
+                        <li>İş bazlı tüketim takibi (opsiyonel)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="cost-box" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                <h3>Toplam Süre</h3>
+                <div class="cost-amount">8-12 Hafta</div>
+                <p>(2-3 ay)</p>
+            </div>
+        </div>
+
+        <!-- Slide 9: Sistem Mimarisi -->
+        <div class="slide">
+            <h2>🏗️ Sistem Mimarisi</h2>
+            
+            <div class="tech-spec">
+                <h3>Kurulum Şeması</h3>
+                <pre style="background: #1f2937; color: #10b981; padding: 20px; border-radius: 8px; overflow-x: auto; font-family: 'Courier New', monospace;">
+[Kızgın Yağ Kazanı]
+        ↓
+[Ana Dağıtım Hattı]
+        ↓
+┌───────┼───────┼───────┼───────┼───────┐
+↓       ↓       ↓       ↓       ↓
+[KAL-1] [KAL-2] [KAL-3] [KAL-4] [KAL-5]  ← Kalorimetreler (Modbus RTU/TCP)
+↓       ↓       ↓       ↓       ↓
+[M1]    [M2]    [M3]    [M4]    [M5]     ← Makine Fırınları
+↓       ↓       ↓       ↓       ↓
+[T1]    [T2]    [T3]    [T4]    [T5]     ← Çıkış Sıcaklık Sensörleri
+↓       ↓       ↓       ↓       ↓
+[Dönüş Hatları]
+        ↓
+[Kazan Dönüş Hattı]
+                </pre>
+            </div>
+
+            <h3>Veri Akışı</h3>
+            <div class="tech-spec">
+                <p><strong>1. Ölçüm:</strong> Kalorimetreler → Akış, Sıcaklık, Enerji değerleri</p>
+                <p><strong>2. Haberleşme:</strong> Modbus RTU/TCP → PLC/Data Logger</p>
+                <p><strong>3. Veri İşleme:</strong> PLC → SQL Veritabanı</p>
+                <p><strong>4. Görselleştirme:</strong> SQL → Dashboard (Web/Desktop)</p>
+                <p><strong>5. Raporlama:</strong> Dashboard → PDF/Excel Raporlar</p>
+            </div>
+
+            <h3>Veritabanı Yapısı</h3>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Tablo</th>
+                        <th>Açıklama</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>HotOilMachines</td>
+                        <td>Makine tanımları</td>
+                    </tr>
+                    <tr>
+                        <td>HotOilMeasurements</td>
+                        <td>Anlık ölçüm verileri (her 1 dakika)</td>
+                    </tr>
+                    <tr>
+                        <td>HotOilEnergyConsumption</td>
+                        <td>Enerji tüketim özeti (saatlik, günlük)</td>
+                    </tr>
+                    <tr>
+                        <td>HotOilJobs</td>
+                        <td>İş bazlı tüketim (opsiyonel)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Slide 10: Sonuç ve Öneriler -->
+        <div class="slide">
+            <h2>✅ Sonuç ve Öneriler</h2>
+            
+            <div class="recommended">
+                ⭐ ÖNERİLEN ÇÖZÜM: HABERLEŞMELİ KALORİMETRE (Modbus RTU/TCP) ⭐
+            </div>
+
+            <h3>Neden Bu Çözüm?</h3>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>🎯 Direkt Enerji Çıkışı</h4>
+                    <p>kW ve kWh değerleri hazır, hesaplama gerekmez</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>📡 Modbus Entegrasyonu</h4>
+                    <p>Mevcut sisteminizle kolay entegrasyon</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>🔧 Daha Az Montaj</h4>
+                    <p>5 nokta vs 15 nokta (ayrı sensörler)</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>📊 Yüksek Hassasiyet</h4>
+                    <p>±0.5% - ±1% enerji ölçüm hassasiyeti</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>💰 Uzun Vadede Değerli</h4>
+                    <p>Daha az bakım, daha az arıza</p>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>📈 Detaylı Analiz</h4>
+                    <p>Makine ve iş bazlı tüketim analizi</p>
+                </div>
+            </div>
+
+            <h3>Sonraki Adımlar</h3>
+            <div class="timeline">
+                <div class="timeline-item">
+                    <strong>1. Teknik Onay:</strong> Proje dokümantasyonunun teknik ekip tarafından gözden geçirilmesi
+                </div>
+                <div class="timeline-item">
+                    <strong>2. Bütçe Onayı:</strong> Maliyet analizinin yönetim tarafından onaylanması
+                </div>
+                <div class="timeline-item">
+                    <strong>3. Tedarikçi Seçimi:</strong> Kalorimetre tedarikçileri ile görüşme ve teklif alma
+                </div>
+                <div class="timeline-item">
+                    <strong>4. Pilot Uygulama:</strong> 1 makine için pilot uygulama
+                </div>
+                <div class="timeline-item">
+                    <strong>5. Tam Kurulum:</strong> Başarılı pilot sonrası kalan 4 makine
+                </div>
+            </div>
+
+            <div class="cost-box" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); margin-top: 30px;">
+                <h3>💡 Önemli Not</h3>
+                <p style="font-size: 1.1em;">Haberleşmeli kalorimetre kullanarak verileri Modbus üzerinden almak, sistem entegrasyonunu kolaylaştırır ve gerçek zamanlı izleme imkanı sağlar.</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>Kızgın Yağ Sistemi - Makine Bazlı Enerji Tüketim Ölçüm Projesi</p>
+            <p>Hazırlanma Tarihi: 2025-01-27 | Versiyon: 1.0</p>
+        </div>
+    </div>
+</body>
+</html>
+

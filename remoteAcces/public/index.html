@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote Access - Uzaktan Erişim</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 1400px;
+            width: 100%;
+            padding: 30px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .status.connected {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status.disconnected {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status.waiting {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .video-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .video-container.fullscreen-remote {
+            grid-template-columns: 1fr;
+        }
+
+        .video-box {
+            background: #1f2937;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            aspect-ratio: 16/9;
+            min-height: 400px;
+        }
+
+        .video-box.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+            border-radius: 0;
+            aspect-ratio: unset;
+        }
+
+        .video-box h3 {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 5px 10px;
+            border-radius: 5px;
+            z-index: 10;
+            font-size: 14px;
+        }
+
+        .video-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 10;
+            display: flex;
+            gap: 10px;
+        }
+
+        .video-controls button {
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            min-width: auto;
+            flex: none;
+        }
+
+        .video-controls button:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+        }
+
+        .remote-video {
+            cursor: crosshair;
+        }
+
+        .remote-video.controlling {
+            cursor: none;
+        }
+
+        .info {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .info h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .info p {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .room-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .video-box.fullscreen video {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        @media (max-width: 768px) {
+            .video-container {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .video-box {
+                min-height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖥️ Remote Access - Uzaktan Erişim</h1>
+
+        <div class="status disconnected" id="status">
+            Bağlantı yok
+        </div>
+
+        <div class="room-input">
+            <input type="text" id="roomId" placeholder="Oda ID (boş bırakırsanız otomatik oluşturulur)" value="">
+            <button class="btn-secondary" onclick="generateRoomId()">Rastgele ID</button>
+        </div>
+
+        <div class="controls">
+            <button class="btn-primary" id="shareBtn" onclick="startSharing()">📺 Ekranı Paylaş (Host)</button>
+            <button class="btn-success" id="connectBtn" onclick="connectToRoom()">🔗 Bağlan</button>
+            <button class="btn-danger" id="disconnectBtn" onclick="disconnect()" disabled>❌ Bağlantıyı Kes</button>
+        </div>
+
+        <div style="margin-bottom: 20px; text-align: center;">
+            <label style="display: inline-flex; align-items: center; gap: 10px; cursor: pointer;">
+                <input type="checkbox" id="controlMode" onchange="toggleControlMode()">
+                <span>🖱️ Uzak Kontrol Modu (Fare ve Klavye)</span>
+            </label>
+        </div>
+
+        <div class="video-container" id="videoContainer">
+            <div class="video-box">
+                <h3>Senin Ekranın</h3>
+                <video id="localVideo" autoplay muted playsinline></video>
+            </div>
+            <div class="video-box" id="remoteVideoBox">
+                <h3>Uzak Ekran</h3>
+                <div class="video-controls">
+                    <button onclick="toggleFullscreen()" id="fullscreenBtn">⛶ Tam Ekran</button>
+                    <button onclick="toggleControl()" id="controlBtn">🖱️ Kontrol Et</button>
+                </div>
+                <video id="remoteVideo" class="remote-video" autoplay playsinline></video>
+            </div>
+        </div>
+
+        <div class="info">
+            <h3>📖 Kullanım Kılavuzu</h3>
+            <p>
+                <strong>Host (Ekran Paylaşan):</strong><br>
+                1. "Ekranı Paylaş" butonuna tıklayın ve paylaşmak istediğiniz ekranı seçin (birden fazla ekran varsa seçebilirsiniz).<br>
+                2. Oda ID'sini girin (veya boş bırakın) ve "Bağlan" butonuna tıklayın.<br>
+                <br>
+                <strong>Client (Bağlanan):</strong><br>
+                1. Oda ID'sini girin (host'un kullandığı ID ile aynı olmalı).<br>
+                2. "Bağlan" butonuna tıklayın (ekran paylaşımı yapmanıza gerek yok).<br>
+                3. Host'un ekranını göreceksiniz.<br>
+                4. "Tam Ekran" butonu ile ekranı büyütebilirsiniz.<br>
+                5. "Kontrol Et" butonu veya checkbox ile fare ve klavye kontrolünü aktif edebilirsiniz.<br>
+                <br>
+                <strong>Not:</strong> Tarayıcı güvenlik kısıtlamaları nedeniyle gerçek fare/klavye kontrolü için desktop uygulaması gerekir. Şu anda sadece görüntüleme ve event gönderimi yapılabilir.<br>
+                <br>
+                <strong>Bağlantıyı Kes:</strong> İşiniz bittiğinde "Bağlantıyı Kes" butonuna tıklayın.
+            </p>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+

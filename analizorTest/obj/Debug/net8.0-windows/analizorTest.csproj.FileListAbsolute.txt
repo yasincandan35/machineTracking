@@ -1,0 +1,15 @@
+C:\Users\yasin.candan\source\machineTracking\analizorTest\bin\Debug\net8.0-windows\analizorTest.exe
+C:\Users\yasin.candan\source\machineTracking\analizorTest\bin\Debug\net8.0-windows\analizorTest.deps.json
+C:\Users\yasin.candan\source\machineTracking\analizorTest\bin\Debug\net8.0-windows\analizorTest.runtimeconfig.json
+C:\Users\yasin.candan\source\machineTracking\analizorTest\bin\Debug\net8.0-windows\analizorTest.dll
+C:\Users\yasin.candan\source\machineTracking\analizorTest\bin\Debug\net8.0-windows\analizorTest.pdb
+C:\Users\yasin.candan\source\machineTracking\analizorTest\obj\Debug\net8.0-windows\analizorTest.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\yasin.candan\source\machineTracking\analizorTest\obj\Debug\net8.0-windows\analizorTest.AssemblyInfoInputs.cache
+C:\Users\yasin.candan\source\machineTracking\analizorTest\obj\Debug\net8.0-windows\analizorTest.AssemblyInfo.cs
+C:\Users\yasin.candan\source\machineTracking\analizorTest\obj\Debug\net8.0-windows\analizorTest.csproj.CoreCompileInputs.cache
+C:\Users\yasin.candan\source\machineTracking\analizorTest\obj\Debug\net8.0-windows\analizorTest.sourcelink.json
+C:\Users\yasin.candan\source\machineTracking\analizorTest\obj\Debug\net8.0-windows\analizorTest.dll
+C:\Users\yasin.candan\source\machineTracking\analizorTest\obj\Debug\net8.0-windows\refint\analizorTest.dll
+C:\Users\yasin.candan\source\machineTracking\analizorTest\obj\Debug\net8.0-windows\analizorTest.pdb
+C:\Users\yasin.candan\source\machineTracking\analizorTest\obj\Debug\net8.0-windows\analizorTest.genruntimeconfig.cache
+C:\Users\yasin.candan\source\machineTracking\analizorTest\obj\Debug\net8.0-windows\ref\analizorTest.dll
