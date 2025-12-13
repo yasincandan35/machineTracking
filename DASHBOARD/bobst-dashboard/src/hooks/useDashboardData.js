@@ -6,8 +6,6 @@ export const useDashboardData = (userId, currentLanguage, activeTab = 'home') =>
   const [liveData, setLiveData] = useState(null);
   const [range, setRange] = useState('24h');
   const [rangeData, setRangeData] = useState([]);
-  const [speedGraphData, setSpeedGraphData] = useState([]);
-  const [ethylGraphData, setEthylGraphData] = useState([]);
   const [machineList, setMachineList] = useState([]);
   const [selectedMachine, setSelectedMachine] = useState(null);
   const shouldFetchLive = activeTab === 'home' || activeTab === 'analysis';
@@ -158,6 +156,67 @@ export const useDashboardData = (userId, currentLanguage, activeTab = 'home') =>
       return;
     }
     
+    // Duruş sebebi bilgisini çekme fonksiyonu
+    const fetchStoppageReason = async (machineTableName) => {
+      try {
+        const reasonResponse = await api.get('/plcdata/current-stoppage-reason', {
+          params: { machine: machineTableName }
+        });
+        
+        if (reasonResponse.data && reasonResponse.data.hasReason && reasonResponse.data.categoryId > 0 && reasonResponse.data.reasonId > 0) {
+          // Kategori ve sebep isimlerini al
+          try {
+            const { data: categories } = await api.get('/stoppagereasons/categories', {
+              params: { machine: machineTableName }
+            });
+            const category = categories.find(c => c.id === reasonResponse.data.categoryId);
+            
+            if (category) {
+              const { data: reasons } = await api.get(`/stoppagereasons/reasons/${category.id}`, {
+                params: { machine: machineTableName }
+              });
+              const reason = reasons.find(r => r.id === reasonResponse.data.reasonId);
+              
+              if (reason) {
+                setLiveData(prevData => ({
+                  ...prevData,
+                  stopReason: reason.reasonName
+                }));
+              } else {
+                setLiveData(prevData => ({
+                  ...prevData,
+                  stopReason: null
+                }));
+              }
+            } else {
+              setLiveData(prevData => ({
+                ...prevData,
+                stopReason: null
+              }));
+            }
+          } catch (error) {
+            console.warn('⚠️ Kategori/sebep isimleri alınamadı:', error);
+            setLiveData(prevData => ({
+              ...prevData,
+              stopReason: null
+            }));
+          }
+        } else {
+          // Duruş sebebi henüz girilmemiş
+          setLiveData(prevData => ({
+            ...prevData,
+            stopReason: null
+          }));
+        }
+      } catch (error) {
+        console.warn('⚠️ Duruş sebebi alınamadı:', error);
+        setLiveData(prevData => ({
+          ...prevData,
+          stopReason: null
+        }));
+      }
+    };
+
     const fetchPLCData = () => {
       // Artık tüm API'ler tek backend'den geliyor (DashboardBackend - port 5199)
       const isProduction = window.location.hostname === 'track.bychome.xyz';
@@ -246,6 +305,17 @@ export const useDashboardData = (userId, currentLanguage, activeTab = 'home') =>
             ...prevData, // Eski veriler (job verileri)
             ...newLiveData // Yeni PLC verileri (üzerine yaz)
           }));
+          
+          // Duruş sebebi bilgisini çek (sadece duruş varsa)
+          if (data.stoppageDuration > 0) {
+            fetchStoppageReason(selectedMachine.tableName);
+          } else {
+            // Duruş yoksa duruş sebebini temizle
+            setLiveData(prevData => ({
+              ...prevData,
+              stopReason: null
+            }));
+          }
         })
         .catch(err => {
           console.error("❌ PLCDataCollector'dan veri alınamadı:", err);
@@ -348,22 +418,18 @@ export const useDashboardData = (userId, currentLanguage, activeTab = 'home') =>
     return () => clearInterval(intv);
   }, [currentLanguage, selectedMachine, shouldFetchLive]); // 🆕 selectedMachine değişince yeniden bağlan
 
-  // Grafik verisi çek
+  // Range verisi çek (stoppage chart gibi diğer kartlar için)
   useEffect(() => {
     if (!shouldFetchRange) {
-      console.log('⏸️ Aktif sekme grafik verisi gerektirmiyor');
+      console.log('⏸️ Aktif sekme range verisi gerektirmiyor');
       setRangeData([]);
-      setSpeedGraphData([]);
-      setEthylGraphData([]);
       return;
     }
 
-    // Main Dashboard (id: -1) için grafik verisi çekme
+    // Main Dashboard (id: -1) için range verisi çekme
     if (!selectedMachine?.tableName || selectedMachine.id === -1) {
       console.log('🌐 Main Dashboard veya makine yok, range verisi temizleniyor');
       setRangeData([]);
-      setSpeedGraphData([]);
-      setEthylGraphData([]);
       return;
     }
     
@@ -374,46 +440,12 @@ export const useDashboardData = (userId, currentLanguage, activeTab = 'home') =>
         // API response formatını kontrol et
         const responseData = Array.isArray(res.data) ? res.data : (res.data?.data || []);
         setRangeData(responseData);
-        
-        const speedData = responseData.map(x => {
-          try {
-            return {
-              kayitZamani: new Date(x.kayitZamani),
-              machineSpeed: x.machineSpeed || 0
-            };
-          } catch (error) {
-            console.warn('Date parsing error in speed:', error);
-            return null;
-          }
-        }).filter(Boolean);
-        
-        setSpeedGraphData(speedData);
-        
-        // Etil tüketim verisi
-        const ethylData = responseData.map(x => {
-          try {
-            return {
-              kayitZamani: new Date(x.kayitZamani),
-              ethylAcetate: x.etilAsetat || 0,
-              ethylAlcohol: x.etilAlkol || 0
-            };
-          } catch (error) {
-            console.warn('Date parsing error in ethyl:', error);
-            return null;
-          }
-        }).filter(Boolean);
-        
-        setEthylGraphData(ethylData);
-        
-        // Grafik debug kaldırıldı - console temiz olsun
       })
       .catch(err => {
         // AdminPanel gibi sayfalarda bu hata normal olabilir, sessizce yakala
         if (activeTab !== 'admin' && activeTab !== 'database' && activeTab !== 'roles') {
           console.error('Range data fetch error', err);
         }
-        setSpeedGraphData([]);
-        setEthylGraphData([]);
         setRangeData([]);
       });
   }, [range, selectedMachine, currentLanguage, shouldFetchRange, activeTab]);
@@ -423,8 +455,6 @@ export const useDashboardData = (userId, currentLanguage, activeTab = 'home') =>
     range,
     setRange,
     rangeData,
-    speedGraphData,
-    ethylGraphData,
     machineList,
     selectedMachine,
     setSelectedMachine,

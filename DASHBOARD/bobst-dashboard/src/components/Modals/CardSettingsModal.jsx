@@ -21,11 +21,8 @@ const supportedCardKeys = new Set([
   "estimatedTimeInfo",
   "productionSummaryInfo",
   "robotPalletizingInfo",
-  "speedGraph",
-  "dieSpeedGraph",
-  "ethylConsumptionGraph",
   "oeeGauge",
-  "stoppageChart"
+  "stoppageChart",
 ]);
 
 const basicCards = [
@@ -53,13 +50,10 @@ const advancedCards = [
   { key: "robotPalletizingInfo", label: "robotPalletizingCard" }
 ].filter(c => supportedCardKeys.has(c.key));
 
-const graphCards = [
-  { key: "speedGraph", label: "speedGraphCard" },
-  { key: "dieSpeedGraph", label: "dieSpeedGraphCard" },
-  { key: "ethylConsumptionGraph", label: "ethylConsumptionGraphCard" }
-].filter(c => supportedCardKeys.has(c.key));
+// Periyodik özet kartları artık ayrı bir sekmede (PeriodicSummariesPage) gösteriliyor
+// CardSettingsModal'dan kaldırıldı
 
-const allCards = [...basicCards, ...advancedCards, ...graphCards];
+const allCards = [...basicCards, ...advancedCards];
 
 export default function CardSettingsModal({ 
   onClose, 
@@ -142,16 +136,6 @@ export default function CardSettingsModal({
     }
   };
 
-  const handleSelectGraphCards = () => {
-    const graphCardKeys = graphCards.map(card => card.key);
-    const otherCards = selectedCards.filter(key => !graphCardKeys.includes(key));
-    
-    if (graphCardKeys.every(key => selectedCards.includes(key))) {
-      setSelectedCards(otherCards);
-    } else {
-      setSelectedCards([...otherCards, ...graphCardKeys]);
-    }
-  };
 
   const handleSave = async () => {
     if (selectedCards.length === 0) {
@@ -232,36 +216,6 @@ export default function CardSettingsModal({
                     checked={selectedCards.includes(card.key)}
                     onChange={() => handleToggle(card.key)}
                     className="text-purple-600"
-                  />
-                  <span className="text-sm">{getTranslation(card.label, currentLanguage)}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium text-green-600 dark:text-green-400">
-                📈 {currentLanguage === 'tr' ? 'Grafik Kartları' : 'Graph Cards'}
-              </h3>
-              <button
-                onClick={handleSelectGraphCards}
-                className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-800"
-              >
-                {graphCards.every(card => selectedCards.includes(card.key)) 
-                  ? (currentLanguage === 'tr' ? 'Kaldır' : 'Remove') 
-                  : (currentLanguage === 'tr' ? 'Tümünü Seç' : 'Select All')}
-              </button>
-            </div>
-            <div className="border-b border-green-200 dark:border-green-700"></div>
-            <div className="space-y-2">
-              {graphCards.map(card => (
-                <label key={card.key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 p-2 rounded">
-                  <input
-                    type="checkbox"
-                    checked={selectedCards.includes(card.key)}
-                    onChange={() => handleToggle(card.key)}
-                    className="text-green-600"
                   />
                   <span className="text-sm">{getTranslation(card.label, currentLanguage)}</span>
                 </label>

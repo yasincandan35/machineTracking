@@ -17,7 +17,6 @@ export const ColorProvider = ({ children }) => {
   const [colorSettings, setColorSettings] = useState({
     background: '#f8fafc',
     infoCard: '#ffffff',
-    graphCard: '#ffffff',
     sidebar: '#1f2937',
     text: '#1f2937',
     accent: '#3b82f6'
@@ -28,7 +27,6 @@ export const ColorProvider = ({ children }) => {
   const defaultColors = {
     background: '#f8fafc',
     infoCard: '#ffffff',
-    graphCard: '#ffffff',
     sidebar: '#1f2937',
     text: '#1f2937',
     accent: '#3b82f6'

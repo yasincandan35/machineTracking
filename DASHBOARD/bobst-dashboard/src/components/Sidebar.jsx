@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
-import { Home, Settings, Plus, ClipboardList, Shield, User, LogOut, Database, MessageSquare, Clock, FileText, BarChart3, ThermometerSun, Monitor, Wrench } from "lucide-react";
+import { Home, Settings, Plus, ClipboardList, Shield, User, LogOut, Database, MessageSquare, Clock, FileText, BarChart3, ThermometerSun, Monitor, Wrench, Calendar } from "lucide-react";
 import { getTranslation } from "../utils/translations";
 
 function SidebarLogo() {

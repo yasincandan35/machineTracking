@@ -39,6 +39,7 @@ Bu dosya, gelecekte yapılacak özellikler ve geliştirmeleri içerir.
 
 #### 2.2 Snapshot Alma Zamanları
 - **Günlük:** Her gün 00:00:00
+- **Haftalık:** Her Pazartesi 00:00:00
 - **Aylık:** Her ayın 1'i 00:00:00
 - **Çeyreklik:** Ocak, Nisan, Temmuz, Ekim 1'i 00:00:00
 - **Yıllık:** 1 Ocak 00:00:00
@@ -92,7 +93,7 @@ Bu dosya, gelecekte yapılacak özellikler ve geliştirmeleri içerir.
 ```
 GET /api/reports/periodic-summary
 Query Parameters:
-  - period: 'daily' | 'monthly' | 'quarterly' | 'yearly' (required)
+  - period: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' (required)
   - start: DateTime? (opsiyonel, varsayılan: dönem başı)
   - end: DateTime? (opsiyonel, varsayılan: dönem sonu)
   - machine: string? (opsiyonel, varsayılan: tüm makineler)
@@ -161,7 +162,7 @@ Response:
 
 #### 4.1 PeriodicSummaryCard.jsx (Genel)
 **Props:**
-- `period`: 'daily' | 'monthly' | 'quarterly' | 'yearly'
+- `period`: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'
 - `data`: API'den gelen summary objesi
 - `darkMode`: boolean
 - `colorSettings`: object
@@ -181,16 +182,21 @@ Response:
 - Gün başı snapshot + canlı veri
 - 24 saatlik grafik (opsiyonel)
 
-#### 4.3 MonthlySummaryCard.jsx
+#### 4.3 WeeklySummaryCard.jsx
+- Bu haftanın özeti (canlı)
+- Hafta başı snapshot + canlı veri
+- Haftalık trend grafiği (opsiyonel)
+
+#### 4.4 MonthlySummaryCard.jsx
 - Bu ayın özeti (canlı)
 - Ay başı snapshot + canlı veri
 - Aylık trend grafiği (opsiyonel)
 
-#### 4.4 QuarterlySummaryCard.jsx
+#### 4.5 QuarterlySummaryCard.jsx
 - Bu çeyreğin özeti (canlı)
 - Çeyrek başı snapshot + canlı veri
 
-#### 4.5 YearlySummaryCard.jsx
+#### 4.6 YearlySummaryCard.jsx
 - Bu yılın özeti (canlı)
 - Yıl başı snapshot + canlı veri
 - Yıllık trend grafiği (opsiyonel)
@@ -202,7 +208,7 @@ Response:
 #### 5.1 usePeriodicSummary Hook
 ```javascript
 const usePeriodicSummary = (period, machine, options = {}) => {
-  // period: 'daily' | 'monthly' | 'quarterly' | 'yearly'
+  // period: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'
   // machine: string | null
   // options: { autoRefresh: true, refreshInterval: 30000 }
   
@@ -225,7 +231,7 @@ const usePeriodicSummary = (period, machine, options = {}) => {
 
 #### 6.1 Kart Ayarlarına Ekleme
 - Mevcut `wastageInfoCard` gibi yeni kartlar eklenebilir
-- Kullanıcı seçebilir: Günlük, Aylık, 3 Aylık, Yıllık özet kartları
+- Kullanıcı seçebilir: Günlük, Haftalık, Aylık, 3 Aylık, Yıllık özet kartları
 - JOB kartı sabit kalır (mevcut mantık korunur)
 
 #### 6.2 Kart Yerleşimi

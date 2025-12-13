@@ -17,10 +17,6 @@ import EstimatedTimeInfoCard from '../components/Cards/Infos/EstimatedTimeInfoCa
 import ProductionInfoCard from '../components/Cards/Infos/ProductionInfoCard';
 import RobotPalletizingInfoCard from '../components/Cards/Infos/RobotPalletizingInfoCard';
 
-// Grafik kartları
-import SpeedGraph from '../components/Cards/Graphs/SpeedGraph';
-import DieSpeedGraph from '../components/Cards/Graphs/DieSpeedGraph';
-import EthylConsumptionGraph from '../components/Cards/Graphs/EthylConsumptionGraph';
 
 // Kart boyut tanımları
 export const cardDimensions = {
@@ -48,12 +44,7 @@ export const cardDimensions = {
   // Özel kartlar
   'productionSummaryInfo': { w: 1, h: 2 }, // 1 kolon x 2 satır
   'oeeGauge': { w: 1, h: 3 }, // 1 kolon x 3 satır
-  'stoppageChart': { w: 2, h: 3 }, // 2 kolon x 3 satır
-  
-  // Grafik kartları - geniş
-  'speedGraph': { w: 3, h: 2 },
-  'dieSpeedGraph': { w: 3, h: 2 },
-  'ethylConsumptionGraph': { w: 3, h: 2 }
+  'stoppageChart': { w: 2, h: 3 } // 2 kolon x 3 satır
 };
 
 // Kart render fonksiyonu
@@ -70,7 +61,7 @@ export const renderInfoCard = (cardType, values, liveData, darkMode, colorSettin
     case "Die Speed": return <DieSpeedInfoCard value={fmt(last)} style={cardStyle} currentLanguage={currentLanguage} />;
     case "Ethyl Acetate": return <EthylAcetateConsumptionInfoCard value={last} style={cardStyle} currentLanguage={currentLanguage} />;
     case "Ethyl Alcohol": return <EthylAlcoholConsumptionInfoCard value={last} style={cardStyle} currentLanguage={currentLanguage} />;
-    case "Stop Duration": return <StopDurationInfoCard value={liveData?.stopDurationSec} totalValue={liveData?.totalStoppageDurationSec} style={cardStyle} currentLanguage={currentLanguage} />;
+    case "Stop Duration": return <StopDurationInfoCard value={liveData?.stopDurationSec} totalValue={liveData?.totalStoppageDurationSec} stopReason={liveData?.stopReason} style={cardStyle} currentLanguage={currentLanguage} />;
     case "Actual Production": return <ActualProductionInfoCard value={fmt(last)} style={cardStyle} currentLanguage={currentLanguage} />;
     case "Remaining Work": return <RemainingWorkInfoCard value={fmt(last)} style={cardStyle} currentLanguage={currentLanguage} />;
     case "Estimated Time": return <EstimatedTimeInfoCard value={last} style={cardStyle} currentLanguage={currentLanguage} />;
@@ -117,31 +108,4 @@ export const createInfoCardMap = (liveData, darkMode, colorSettings, currentLang
   estimatedTimeInfo: () => renderInfoCard("Estimated Time", [liveData?.estimatedTime], liveData, darkMode, colorSettings, currentLanguage),
   productionSummaryInfo: () => renderInfoCard("Production Summary", [], liveData, darkMode, colorSettings, currentLanguage),
   robotPalletizingInfo: () => renderInfoCard("Robot Palletizing", [], liveData, darkMode, colorSettings, currentLanguage),
-});
-
-// Grafik kartları haritası
-export const createGraphCardMap = (chartData, darkMode, colorSettings, currentLanguage, range, liveData) => ({
-  speedGraph: () => <SpeedGraph 
-    data={chartData.speed} 
-    isDark={darkMode} 
-    range={range}
-    style={darkMode ? {} : { backgroundColor: colorSettings.graphCard, color: colorSettings.text }}
-    lineColor={darkMode ? "#3b82f6" : colorSettings.accent}
-    currentLanguage={currentLanguage}
-    targetSpeed={liveData?.hedefHiz || 0}
-  />,
-  dieSpeedGraph: () => <DieSpeedGraph 
-    data={chartData.dieSpeed} 
-    isDark={darkMode} 
-    style={darkMode ? {} : { backgroundColor: colorSettings.graphCard, color: colorSettings.text }}
-    lineColor={darkMode ? "#a855f7" : "#8b5cf6"}
-    currentLanguage={currentLanguage}
-  />,
-  ethylConsumptionGraph: () => <EthylConsumptionGraph 
-    data={chartData.ethylConsumption} 
-    isDark={darkMode} 
-    range={range}
-    style={darkMode ? {} : { backgroundColor: colorSettings.graphCard, color: colorSettings.text }}
-    currentLanguage={currentLanguage}
-  />,
 });

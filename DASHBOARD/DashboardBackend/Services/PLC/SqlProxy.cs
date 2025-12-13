@@ -530,6 +530,49 @@ namespace DashboardBackend.Services.PLC
                     }
                 }
                 
+                // Eğer hala 0 ise ve activeCycle null veya snapshot yoksa, veritabanından sipariş numarasına göre ara
+                Dictionary<string, object>? dbCycleRecord = null;
+                if ((totalEnergyKwhStart == 0.0 || totalEnergyKwhEnd == 0.0) && currentJobData != null && currentJobData.ContainsKey("siparis_no"))
+                {
+                    var dbOrderNumber = currentJobData["siparis_no"]?.ToString();
+                    if (!string.IsNullOrWhiteSpace(dbOrderNumber))
+                    {
+                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 🔍 [EndJobAsync] activeCycle'da snapshot bulunamadı, veritabanından sipariş numarasına göre aranıyor: {dbOrderNumber}");
+                        dbCycleRecord = await GetJobCycleRecordByOrderNumberAsync(dbOrderNumber);
+                        
+                        // Initial snapshot'ı oku
+                        if (totalEnergyKwhStart == 0.0 && dbCycleRecord != null && dbCycleRecord.TryGetValue("initial_snapshot", out var dbInitialSnapshotStr) && dbInitialSnapshotStr != null)
+                        {
+                            try
+                            {
+                                var initialSnapshot = JsonSerializer.Deserialize<Dictionary<string, object>>(dbInitialSnapshotStr.ToString() ?? "{}");
+                                if (initialSnapshot != null)
+                                {
+                                    if (initialSnapshot.TryGetValue("TotalEnergy", out var totalEnergyObj))
+                                    {
+                                        totalEnergyKwhStart = ToDouble(totalEnergyObj);
+                                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhStart veritabanından initial_snapshot'tan (TotalEnergy) alındı: {totalEnergyKwhStart:F2} kWh");
+                                    }
+                                    else if (initialSnapshot.TryGetValue("totalEnergyKwh", out var totalEnergyKwhObj))
+                                    {
+                                        totalEnergyKwhStart = ToDouble(totalEnergyKwhObj);
+                                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhStart veritabanından initial_snapshot'tan (totalEnergyKwh) alındı: {totalEnergyKwhStart:F2} kWh");
+                                    }
+                                    else if (initialSnapshot.TryGetValue("TotalEnergyKwh", out var totalEnergyKwhObj2))
+                                    {
+                                        totalEnergyKwhStart = ToDouble(totalEnergyKwhObj2);
+                                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhStart veritabanından initial_snapshot'tan (TotalEnergyKwh) alındı: {totalEnergyKwhStart:F2} kWh");
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠️ [EndJobAsync] Veritabanından initial_snapshot parse hatası: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+                
                 if (totalEnergyKwhStart == 0.0)
                 {
                     Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠️ [EndJobAsync] totalEnergyKwhStart bulunamadı, 0 kullanılıyor");
@@ -596,6 +639,37 @@ namespace DashboardBackend.Services.PLC
                     catch (Exception ex)
                     {
                         Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠️ [EndJobAsync] final_snapshot parse hatası: {ex.Message}");
+                    }
+                }
+                
+                // Final snapshot'ı da dbCycleRecord'dan oku (eğer yukarıda çekildiyse)
+                if (totalEnergyKwhEnd == 0.0 && dbCycleRecord != null && dbCycleRecord.TryGetValue("final_snapshot", out var dbFinalSnapshotStr) && dbFinalSnapshotStr != null)
+                {
+                    try
+                    {
+                        var finalSnapshot = JsonSerializer.Deserialize<Dictionary<string, object>>(dbFinalSnapshotStr.ToString() ?? "{}");
+                        if (finalSnapshot != null)
+                        {
+                            if (finalSnapshot.TryGetValue("TotalEnergy", out var totalEnergyObj))
+                            {
+                                totalEnergyKwhEnd = ToDouble(totalEnergyObj);
+                                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhEnd veritabanından final_snapshot'tan (TotalEnergy) alındı: {totalEnergyKwhEnd:F2} kWh");
+                            }
+                            else if (finalSnapshot.TryGetValue("totalEnergyKwh", out var totalEnergyKwhObj))
+                            {
+                                totalEnergyKwhEnd = ToDouble(totalEnergyKwhObj);
+                                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhEnd veritabanından final_snapshot'tan (totalEnergyKwh) alındı: {totalEnergyKwhEnd:F2} kWh");
+                            }
+                            else if (finalSnapshot.TryGetValue("TotalEnergyKwh", out var totalEnergyKwhObj2))
+                            {
+                                totalEnergyKwhEnd = ToDouble(totalEnergyKwhObj2);
+                                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhEnd veritabanından final_snapshot'tan (TotalEnergyKwh) alındı: {totalEnergyKwhEnd:F2} kWh");
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠️ [EndJobAsync] Veritabanından final_snapshot parse hatası: {ex.Message}");
                     }
                 }
                 
@@ -3759,6 +3833,50 @@ namespace DashboardBackend.Services.PLC
             catch (Exception ex)
             {
                 LogMessage($"❌ Aktif JobCycleRecord okuma hatası: {ex.Message}");
+                return null;
+            }
+        }
+
+        private async Task<Dictionary<string, object>?> GetJobCycleRecordByOrderNumberAsync(string orderNumber)
+        {
+            try
+            {
+                using var conn = new SqlConnection(connectionString);
+                await conn.OpenAsync();
+                await EnsureJobCycleRecordsTableAsync(conn);
+                
+                var query = @"
+                    SELECT TOP 1 *
+                    FROM JobCycleRecords
+                    WHERE siparis_no = @siparis_no
+                    ORDER BY cycle_start_time DESC";
+                
+                using var cmd = new SqlCommand(query, conn);
+                cmd.Parameters.AddWithValue("@siparis_no", orderNumber);
+                using var reader = await cmd.ExecuteReaderAsync();
+                
+                if (await reader.ReadAsync())
+                {
+                    return new Dictionary<string, object>
+                    {
+                        ["id"] = reader["id"],
+                        ["status"] = reader["status"].ToString() ?? "",
+                        ["cycle_start_time"] = reader["cycle_start_time"],
+                        ["cycle_end_time"] = reader["cycle_end_time"],
+                        ["siparis_no"] = reader["siparis_no"],
+                        ["job_info"] = reader["job_info"]?.ToString(),
+                        ["initial_snapshot"] = reader["initial_snapshot"]?.ToString(),
+                        ["final_snapshot"] = reader["final_snapshot"]?.ToString(),
+                        ["created_at"] = reader["created_at"],
+                        ["updated_at"] = reader["updated_at"]
+                    };
+                }
+                
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ❌ [GetJobCycleRecordByOrderNumberAsync] JobCycleRecord okuma hatası: {ex.Message}");
                 return null;
             }
         }

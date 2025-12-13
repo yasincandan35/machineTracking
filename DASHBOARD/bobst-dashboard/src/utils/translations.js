@@ -3,6 +3,7 @@ export const translations = {
     // Sidebar menu
     home: 'Anasayfa',
     analysis: 'Analiz',
+    periodicSummaries: 'Periyodik Özetler',
     reports: 'Raporlar',
     feedback: 'Geri Bildirim',
     projectTimeline: 'Proje Geliştirme',
@@ -83,6 +84,8 @@ export const translations = {
     totalStoppage: 'Toplam Duruş',
     stoppageCount: 'Duruş Sayısı',
     noStoppageData: 'Bu zaman aralığında duruş verisi bulunamadı',
+    stopReason: 'Duruş Sebebi',
+    stopReasonNotEntered: 'Henüz duruş sebebi girilmedi',
     fullScreenView: 'Tam Ekran Görünümü',
     
     // Grafik zaman aralıkları
@@ -322,6 +325,11 @@ export const translations = {
     lastUpdate: 'Son Güncelleme',
     mainDashboard: 'Ana Panel',
     wastageInfoCard: 'Fire Bilgi Kartı',
+    dailySummaryCard: 'Günlük Özet',
+    weeklySummaryCard: 'Haftalık Özet',
+    monthlySummaryCard: 'Aylık Özet',
+    quarterlySummaryCard: 'Çeyreklik Özet',
+    yearlySummaryCard: 'Yıllık Özet',
     speedGraphCard: 'Hız Grafiği',
     machineStateCard: 'Makine Durumu Kartı',
     dieCounterCard: 'Die Counter Kartı',
@@ -619,6 +627,7 @@ export const translations = {
     // Sidebar menu
     home: 'Home',
     analysis: 'Analysis',
+    periodicSummaries: 'Periodic Summaries',
     reports: 'Reports',
     feedback: 'Feedback',
     projectTimeline: 'Project Timeline',
@@ -698,6 +707,8 @@ export const translations = {
     totalStoppage: 'Total Stoppage',
     stoppageCount: 'Stoppage Count',
     noStoppageData: 'No stoppage data found for this time period',
+    stopReason: 'Stop Reason',
+    stopReasonNotEntered: 'Stop reason not yet entered',
     fullScreenView: 'Full Screen View',
     
     // Graph time ranges
@@ -941,6 +952,11 @@ export const translations = {
     lastUpdate: 'Last Update',
     mainDashboard: 'Main Dashboard',
     wastageInfoCard: 'Wastage Info Card',
+    dailySummaryCard: 'Daily Summary',
+    weeklySummaryCard: 'Weekly Summary',
+    monthlySummaryCard: 'Monthly Summary',
+    quarterlySummaryCard: 'Quarterly Summary',
+    yearlySummaryCard: 'Yearly Summary',
     speedGraphCard: 'Speed Graph',
     machineStateCard: 'Machine State Card',
     dieCounterCard: 'Die Counter Card',
@@ -1268,6 +1284,8 @@ export const translations = {
     totalStoppage: 'Gesamter Stillstand',
     stoppageCount: 'Stillstandsanzahl',
     noStoppageData: 'Keine Stillstandsdaten für diesen Zeitraum gefunden',
+    stopReason: 'Stillstandsgrund',
+    stopReasonNotEntered: 'Stillstandsgrund noch nicht eingegeben',
     fullScreenView: 'Vollbildansicht',
     
     // Ethyl-Karte
@@ -1668,6 +1686,8 @@ export const translations = {
     totalStoppage: 'Arrêt total',
     stoppageCount: 'Nombre d\'arrêts',
     noStoppageData: 'Aucune donnée d\'arrêt trouvée pour cette période',
+    stopReason: 'Raison d\'arrêt',
+    stopReasonNotEntered: 'Raison d\'arrêt pas encore saisie',
     fullScreenView: 'Vue Plein Écran',
     
     // Etil kartı
@@ -2055,6 +2075,8 @@ export const translations = {
     totalStoppage: 'Fermata totale',
     stoppageCount: 'Numero fermate',
     noStoppageData: 'Nessun dato di fermata trovato per questo periodo',
+    stopReason: 'Motivo della fermata',
+    stopReasonNotEntered: 'Motivo della fermata non ancora inserito',
     fullScreenView: 'Visualizzazione a Schermo Intero',
     
     // Etil kartı
@@ -2416,6 +2438,8 @@ export const translations = {
     totalStoppage: 'Общая остановка',
     stoppageCount: 'Количество остановок',
     noStoppageData: 'Данные об остановках за этот период не найдены',
+    stopReason: 'Причина остановки',
+    stopReasonNotEntered: 'Причина остановки еще не введена',
     fullScreenView: 'Полноэкранный Режим',
     
     // Etil kartı

@@ -2,7 +2,6 @@
 export { default as Sidebar } from './Sidebar';
 export { default as MachineSelect } from './MachineSelect';
 export { default as AddCardPanel } from './AddCardPanel';
-export { default as GraphCard } from './GraphCard';
 
 // Sub Components
 export * from './Common';

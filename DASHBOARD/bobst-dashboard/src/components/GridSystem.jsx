@@ -24,6 +24,7 @@ import EstimatedTimeInfoCard from './Cards/Infos/EstimatedTimeInfoCard';
 import RobotPalletizingInfoCard from './Cards/Infos/RobotPalletizingInfoCard';
 import OEEGauge from './Cards/OEEGauge';
 import StoppageChart from './Cards/StoppageChart';
+import PeriodicSummaryCard from './Cards/PeriodicSummaryCard';
 
 // Grafik kartları GridSystem'de kullanılmıyor - Dashboard.jsx'de ayrı render ediliyor
 
@@ -202,7 +203,7 @@ export default function GridSystem({
       style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }}
       currentLanguage={currentLanguage}
     />,
-    stopDurationInfo: () => <StopDurationInfoCard value={liveData?.stopDurationSec} totalValue={liveData?.totalStoppageDurationSec} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} />,
+    stopDurationInfo: () => <StopDurationInfoCard value={liveData?.stopDurationSec} totalValue={liveData?.totalStoppageDurationSec} stopReason={liveData?.stopReason} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} />,
     actualProductionInfo: () => <ActualProductionInfoCard value={liveData?.actualProduction || 0} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} />,
     remainingWorkInfo: () => <RemainingWorkInfoCard value={liveData?.remainingWork || 0} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} />,
     estimatedTimeInfo: () => <EstimatedTimeInfoCard value={liveData?.estimatedTime || 0} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} />,
@@ -215,7 +216,14 @@ export default function GridSystem({
       currentLanguage={currentLanguage} 
     />,
     oeeGauge: () => <OEEGauge darkMode={darkMode} colorSettings={colorSettings} liveData={liveData} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} />,
-    stoppageChart: () => <StoppageChart isDark={darkMode} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} selectedMachine={selectedMachine} />
+    stoppageChart: () => <StoppageChart isDark={darkMode} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} selectedMachine={selectedMachine} />,
+    
+    // Periyodik Özet Kartları
+    dailySummary: () => <PeriodicSummaryCard period="daily" machine={selectedMachine?.tableName} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} darkMode={darkMode} />,
+    weeklySummary: () => <PeriodicSummaryCard period="weekly" machine={selectedMachine?.tableName} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} darkMode={darkMode} />,
+    monthlySummary: () => <PeriodicSummaryCard period="monthly" machine={selectedMachine?.tableName} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} darkMode={darkMode} />,
+    quarterlySummary: () => <PeriodicSummaryCard period="quarterly" machine={selectedMachine?.tableName} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} darkMode={darkMode} />,
+    yearlySummary: () => <PeriodicSummaryCard period="yearly" machine={selectedMachine?.tableName} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} darkMode={darkMode} />
     
     // Grafik kartları GridSystem'den kaldırıldı - sadece Dashboard.jsx'de render ediliyor
   };

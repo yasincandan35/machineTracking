@@ -16,10 +16,6 @@ import { useDashboardData } from '../hooks/useDashboardData';
 import MachineOverviewCard from '../components/Cards/MachineOverviewCard';
 import FluidBackground from '../components/FluidBackground';
 
-// Grafik kartları
-import SpeedGraph from '../components/Cards/Graphs/SpeedGraph';
-import DieSpeedGraph from '../components/Cards/Graphs/DieSpeedGraph';
-import EthylConsumptionGraph from '../components/Cards/Graphs/EthylConsumptionGraph';
 import OEEGauge from '../components/Cards/OEEGauge';
 
 // Diğer sayfalar
@@ -35,6 +31,7 @@ import JobPassportPage from './JobPassportPage';
 import AnalysisPage from './AnalysisPage';
 import TemperatureHumidityPage from './TemperatureHumidityPage';
 import MaintenancePage from './MaintenancePage';
+import PeriodicSummariesPage from './PeriodicSummariesPage';
 import { usePushNotification } from '../contexts/PushNotificationContext';
 import { Bell, X, AlertCircle } from 'lucide-react';
 
@@ -67,6 +64,7 @@ function Dashboard() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [savedLayout, setSavedLayout] = useState(null);
   const [hasLoadedPreferences, setHasLoadedPreferences] = useState(false);
+  const [homeSubTab, setHomeSubTab] = useState('dashboard'); // 'dashboard' | 'periodicSummaries'
 
   const { user } = useAuth();
   const { colorSettings } = useColor();
@@ -198,32 +196,10 @@ function Dashboard() {
     range,
     setRange,
     rangeData,
-    speedGraphData,
-    ethylGraphData,
     machineList: hookMachineList,
     selectedMachine: hookSelectedMachine,
     setSelectedMachine: hookSetSelectedMachine
   } = useDashboardData(userId, currentLanguage, currentTab);
-
-  const chartData = useMemo(() => {
-    const data = {
-      speed: speedGraphData.map(x => ({
-        name: x.kayitZamani?.toISOString() || new Date().toISOString(),
-        value: x.machineSpeed || 0
-      })),
-      dieSpeed: rangeData.map(x => ({
-        name: new Date(x.kayitZamani).toISOString(),
-        value: x.dieSpeed || 0
-      })).filter(item => item.name && !isNaN(new Date(item.name).getTime())),
-      ethylConsumption: ethylGraphData.map(x => ({
-        name: x.kayitZamani?.toISOString() || new Date().toISOString(),
-        ethylAcetate: x.ethylAcetate || 0,
-        ethylAlcohol: x.ethylAlcohol || 0
-      })).filter(item => item.name && !isNaN(new Date(item.name).getTime()))
-    };
-
-    return data;
-  }, [rangeData, speedGraphData, ethylGraphData]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -456,14 +432,49 @@ function Dashboard() {
 
         {currentTab === 'home' && (
           <>
-            {!hasLoadedPreferences && isLoadingPreferences ? (
-              <div className="flex items-center justify-center h-screen">
-                <div className="text-center">
-                  <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mb-4"></div>
-                  <p className="text-gray-600 dark:text-gray-400">Ayarlar yükleniyor...</p>
-                </div>
+            {/* Home sayfası içi tab'lar */}
+            <div className="px-4 sm:px-6 pt-4">
+              <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => setHomeSubTab('dashboard')}
+                  className={`px-4 py-2 font-medium text-sm transition-colors ${
+                    homeSubTab === 'dashboard'
+                      ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+                >
+                  {currentLanguage === 'tr' ? 'Dashboard' : 'Dashboard'}
+                </button>
+                <button
+                  onClick={() => setHomeSubTab('periodicSummaries')}
+                  className={`px-4 py-2 font-medium text-sm transition-colors ${
+                    homeSubTab === 'periodicSummaries'
+                      ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+                >
+                  {currentLanguage === 'tr' ? 'Periyodik Özetler' : 'Periodic Summaries'}
+                </button>
               </div>
-            ) : hookSelectedMachine?.id === -1 ? (
+            </div>
+
+            {homeSubTab === 'periodicSummaries' ? (
+              <PeriodicSummariesPage
+                darkMode={darkMode}
+                currentLanguage={currentLanguage}
+                selectedMachine={hookSelectedMachine}
+                colorSettings={colorSettings}
+              />
+            ) : (
+              <>
+                {!hasLoadedPreferences && isLoadingPreferences ? (
+                  <div className="flex items-center justify-center h-screen">
+                    <div className="text-center">
+                      <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+                      <p className="text-gray-600 dark:text-gray-400">Ayarlar yükleniyor...</p>
+                    </div>
+                  </div>
+                ) : hookSelectedMachine?.id === -1 ? (
               <div className="h-[calc(100vh-7.5rem)] pr-3 pl-0 pb-3 pt-0">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 h-full pb-3">
                   {(hookMachineList || [])
@@ -519,82 +530,8 @@ function Dashboard() {
                     }
                   }}
                 />
-
-                {visibleCards.filter(key => key.includes('Graph')).length > 0 && (
-                  <div className="mt-8 px-8">
-                    <div className="flex gap-2 mb-6 flex-wrap justify-center">
-                      <span className="text-sm font-medium mr-2">{getTranslation('graphTimeRange', currentLanguage)}:</span>
-                      {[
-                        { key: '12h', label: 'hours12' },
-                        { key: '24h', label: 'hours24' },
-                        { key: '1w', label: 'week1' },
-                        { key: '1m', label: 'month1' },
-                        { key: '1y', label: 'year1' }
-                      ].map(opt => (
-                        <button
-                          key={opt.key}
-                          onClick={() => setRange(opt.key)}
-                          className={`px-3 py-1 text-sm transition-colors ${
-                            isLiquidGlass
-                              ? (range === opt.key ? 'glass-button bg-white/30' : 'glass-button')
-                              : (range === opt.key
-                                ? 'bg-blue-600 text-white rounded'
-                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300 rounded')
-                          }`}
-                        >
-                          {getTranslation(opt.label, currentLanguage)}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
-                      {visibleCards.filter(key => key.includes('Graph')).map(key => {
-                        if (key === 'speedGraph') {
-                          return (
-                            <div key={key}>
-                              <SpeedGraph
-                                data={chartData.speed}
-                                isDark={darkMode}
-                                range={range}
-                                style={darkMode ? {} : { backgroundColor: colorSettings.graphCard, color: colorSettings.text }}
-                                lineColor={darkMode ? '#3b82f6' : colorSettings.accent}
-                                currentLanguage={currentLanguage}
-                                targetSpeed={liveData?.hedefHiz || 0}
-                              />
-                            </div>
-                          );
-                        }
-                        if (key === 'dieSpeedGraph') {
-                          return (
-                            <div key={key}>
-                              <DieSpeedGraph
-                                data={chartData.dieSpeed}
-                                isDark={darkMode}
-                                style={darkMode ? {} : { backgroundColor: colorSettings.graphCard, color: colorSettings.text }}
-                                lineColor={darkMode ? '#a855f7' : '#8b5cf6'}
-                                currentLanguage={currentLanguage}
-                              />
-                            </div>
-                          );
-                        }
-                        if (key === 'ethylConsumptionGraph') {
-                          return (
-                            <div key={key}>
-                              <EthylConsumptionGraph
-                                data={chartData.ethylConsumption}
-                                isDark={darkMode}
-                                range={range}
-                                style={darkMode ? {} : { backgroundColor: colorSettings.graphCard, color: colorSettings.text }}
-                                currentLanguage={currentLanguage}
-                              />
-                            </div>
-                          );
-                        }
-                        return null;
-                      })}
-                    </div>
-                  </div>
-                )}
+              </>
+            )}
               </>
             )}
           </>

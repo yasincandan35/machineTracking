@@ -398,26 +398,6 @@ const SettingsPage = ({ currentLanguage = 'tr' }) => {
                 </div>
               </div>
 
-              {/* Grafik Kartları */}
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">{getTranslation('graphCards', currentLanguage)}</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={localColorSettings.graphCard}
-                    onChange={(e) => handleColorChange('graphCard', e.target.value)}
-                    className="w-12 h-10 border rounded cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={localColorSettings.graphCard}
-                    onChange={(e) => handleColorChange('graphCard', e.target.value)}
-                    className="flex-1 px-3 py-2 border dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="#ffffff"
-                  />
-                </div>
-              </div>
-
               {/* Sidebar */}
               <div>
                 <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">{getTranslation('sidebar', currentLanguage)}</label>

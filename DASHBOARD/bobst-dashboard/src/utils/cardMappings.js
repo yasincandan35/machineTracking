@@ -34,7 +34,14 @@ export const cardDimensions = {
   'productionSummaryInfo': { w: 1, h: 2 }, // 1 kolon x 2 satır
   'oeeGauge': { w: 1, h: 3 }, // 1 kolon x 3 satır - OEE gauge'ları için daha fazla alan
   'oeeInfo': { w: 1, h: 3 }, // 1 kolon x 3 satır - OEE info kartı
-  'stoppageChart': { w: 2, h: 3 } // 2 kolon x 3 satır - Duruş grafiği
+  'stoppageChart': { w: 2, h: 3 }, // 2 kolon x 3 satır - Duruş grafiği
+  
+  // Periyodik Özet Kartları
+  'dailySummary': { w: 1, h: 6 }, // 1 kolon x 6 satır
+  'weeklySummary': { w: 1, h: 6 }, // 1 kolon x 6 satır
+  'monthlySummary': { w: 1, h: 6 }, // 1 kolon x 6 satır
+  'quarterlySummary': { w: 1, h: 6 }, // 1 kolon x 6 satır
+  'yearlySummary': { w: 1, h: 6 } // 1 kolon x 6 satır
   
   // Grafik kartları GridSystem'de kullanılmıyor - Dashboard.jsx'de ayrı render
 };
@@ -46,6 +53,11 @@ export const cardHeights = {
   'robotPalletizingInfo': `${calculateCardHeight(2)}px`, // 2 satır = 304px
   'comprehensiveEnergyInfo': `${calculateCardHeight(3)}px`, // 3 satır = 444px
   'oeeGauge': `${calculateCardHeight(3)}px`,          // 3 satır = 444px
+  'dailySummary': `${calculateCardHeight(6)}px`,      // 6 satır = 864px
+  'weeklySummary': `${calculateCardHeight(6)}px`,     // 6 satır = 864px
+  'monthlySummary': `${calculateCardHeight(6)}px`,    // 6 satır = 864px
+  'quarterlySummary': `${calculateCardHeight(6)}px`,  // 6 satır = 864px
+  'yearlySummary': `${calculateCardHeight(6)}px`,     // 6 satır = 864px
   // 1 satırlık kartlar için varsayılan
   'default': `${calculateCardHeight(1)}px`            // 1 satır = 140px
 };

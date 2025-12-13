@@ -51,6 +51,12 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     });
 
+// HttpClient logging seviyesini azalt (sadece hataları göster)
+builder.Logging.AddFilter("System.Net.Http.HttpClient", LogLevel.Warning);
+builder.Logging.AddFilter("System.Net.Http.HttpClient.Default", LogLevel.Warning);
+builder.Logging.AddFilter("System.Net.Http.HttpClient.Default.LogicalHandler", LogLevel.Warning);
+builder.Logging.AddFilter("System.Net.Http.HttpClient.Default.ClientHandler", LogLevel.Warning);
+
 // Services
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<DashboardBackend.Services.EmailService>();
@@ -77,6 +83,9 @@ builder.Services.AddHostedService<CustomNotificationService>();
 
 // Job Order Retry Background Service
 builder.Services.AddHostedService<JobOrderRetryService>();
+
+// Periodic Snapshot Background Service
+builder.Services.AddHostedService<PeriodicSnapshotService>();
 
 // CORS - Local IP'ler + Production Domain'ler
 builder.Services.AddCors(options =>

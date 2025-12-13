@@ -28,6 +28,24 @@ const ProjectTimelinePage = ({ currentLanguage = 'tr' }) => {
 
   const timelineData = [
     {
+      id: 60,
+      title: 'Dashboard - Grafik Kartları Kaldırıldı & Duruş Sebebi Gösterimi Eklendi',
+      date: '13 Aralık 2025',
+      icon: PauseCircle,
+      color: 'red',
+      details: '🔄 Dashboard Temizleme: Kullanılmayan grafik kartları tamamen kaldırıldı. GraphCard, SpeedGraph, DieSpeedGraph, EthylConsumptionGraph component dosyaları silindi. cardMappings.jsx\'den grafik kartı importları, cardDimensions tanımları ve createGraphCardMap fonksiyonu kaldırıldı. Dashboard.jsx\'den grafik kartı importları, chartData useMemo ve grafik kartı render bölümü temizlendi. CardSettingsModal.jsx\'den grafik kartı seçenekleri ve ilgili UI bölümü kaldırıldı. useDashboardData.js\'den speedGraphData ve ethylGraphData state\'leri kaldırıldı. ColorContext ve SettingsPage\'den graphCard renk ayarları kaldırıldı. 📊 Last Stop Kartı İyileştirmesi: StopDurationInfoCard\'a duruş sebebi gösterimi eklendi. useDashboardData hook\'unda duruş olduğunda /api/plcdata/current-stoppage-reason endpoint\'i çağrılarak duruş sebebi bilgisi çekiliyor. Duruş sebebi varsa kart üzerinde gösteriliyor, yoksa "Henüz duruş sebebi girilmedi" mesajı gösteriliyor (Türkçe/İngilizce/Almanca/Fransızca/İtalyanca/Rusça çeviri desteği). MachineScreen\'den girilen duruş sebepleri dashboard\'da anlık olarak görüntüleniyor.',
+      tags: ['Frontend', 'Dashboard', 'Cleanup', 'Info Card', 'React', 'i18n']
+    },
+    {
+      id: 59,
+      title: 'Periyodik Özet Sistemi - Günlük/Haftalık/Aylık/Çeyreklik/Yıllık Raporlama',
+      date: '9-13 Aralık 2025',
+      icon: Calendar,
+      color: 'purple',
+      details: '📊 Periyodik özet ve raporlama sistemi eklendi. Özellikler: 1) PeriodicSnapshots Tablosu - Günlük, haftalık, aylık, çeyreklik ve yıllık snapshot\'lar için veritabanı tablosu, her makine için ayrı snapshot kayıtları, full_live_data kolonu ile tüm API verilerinin JSON formatında saklanması. 2) PeriodicSnapshotService - Background service ile otomatik snapshot alma (00:00:00\'da), tüm snapshot tiplerinin paralel çalışması, canlı verilerin API\'den çekilip kaydedilmesi. 3) ReportsController - GetPeriodicSummary endpoint\'i ile periyodik özet hesaplama, snapshot ve JobEndReports verilerinin birleştirilmesi, canlı verilerin entegrasyonu. 4) Frontend Components - PeriodicSummaryCard ile günlük/haftalık/aylık/çeyreklik/yıllık özet kartları, PeriodicSummariesPage ile alt-sekme görünümü, usePeriodicSummary hook ile canlı veri güncellemesi (1 saniye). 5) OEE Hesaplama - Her iş için ayrı OEE hesaplanıp ortalaması alınıyor, Availability/Performance/Quality metrikleri, periyod bazlı doğru hesaplama. 🔧 Özellikler: Toplam iş sayısı, üretim, duruş, enerji, fire (adet ve %), OEE metrikleri gösterimi. 🛡️ Güvenlik: TRY_CAST ile güvenli veri dönüşümleri, yeni iş başladığında otomatik tespit, backend restart\'ta veri kaybı olmaması (tüm veriler veritabanında).',
+      tags: ['Backend', 'Frontend', 'Database', 'Reports', 'Real-time', 'C#', 'React', 'SQL']
+    },
+    {
       id: 58,
       title: 'Paylaşımlı Duruş Özelliği - Operatör Geri Bildirimi ile Geliştirme',
       date: '11 Aralık 2025',
@@ -671,7 +689,7 @@ const ProjectTimelinePage = ({ currentLanguage = 'tr' }) => {
             ✅ 100% Tamamlandı
           </span>
           <span className="px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm font-semibold">
-            🚀 Son Güncelleme: 05 Aralık 2025
+            🚀 Son Güncelleme: 13 Aralık 2025
           </span>
         </div>
       </div>
