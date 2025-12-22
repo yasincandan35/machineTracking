@@ -57,6 +57,50 @@ const ReportsPage = ({ darkMode = false, currentLanguage = 'tr', selectedMachine
   const [oeeData, setOeeData] = useState(null);
   const [loadingOee, setLoadingOee] = useState(false);
 
+  // Kalite kontrol sonrası fire için state'ler
+  const [editingWastage, setEditingWastage] = useState(null);
+  const [wastageInputValue, setWastageInputValue] = useState('');
+  const [savingWastage, setSavingWastage] = useState(false);
+
+  // Kalite kontrol sonrası fire güncelleme fonksiyonu
+  const handleUpdateWastageAfterQualityControl = async (reportId, value) => {
+    if (!selectedMachine || selectedMachine.id === -1 || !selectedMachine.tableName) {
+      showError('Makine seçilmedi');
+      return;
+    }
+
+    const wastageValue = parseFloat(value);
+    if (isNaN(wastageValue) || wastageValue < 0) {
+      showError('Geçerli bir pozitif sayı girin');
+      return;
+    }
+
+    setSavingWastage(true);
+    try {
+      const machineApi = createMachineApi(selectedMachine);
+      const response = await machineApi.put(`/reports/wastage-after-quality-control/${reportId}`, {
+        wastageAfterQualityControl: wastageValue
+      }, {
+        params: { machine: selectedMachine.name }
+      });
+
+      if (response.data.success) {
+        showSuccess('Kalite-Kontrol Sonrası Fire başarıyla güncellendi');
+        // Raporları yeniden yükle
+        await loadReports();
+        setEditingWastage(null);
+        setWastageInputValue('');
+      } else {
+        showError(response.data.error || 'Güncelleme başarısız');
+      }
+    } catch (error) {
+      console.error('Fire güncelleme hatası:', error);
+      showError(error.response?.data?.error || 'Fire güncellenirken bir hata oluştu');
+    } finally {
+      setSavingWastage(false);
+    }
+  };
+
   // Dil yönetimi artık Dashboard'dan geliyor, bu useEffect kaldırıldı
 
   // Load reports - DİNAMİK IP
@@ -771,13 +815,6 @@ const ReportsPage = ({ darkMode = false, currentLanguage = 'tr', selectedMachine
                     <div className="flex-1">
                       <div className="flex items-center gap-4 mb-2">
                         <h3 className="text-lg font-semibold">{report.siparis_no}</h3>
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          report.CompletionPercentage >= 100 
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                        }`}>
-                          {report.CompletionPercentage >= 100 ? getTranslation('completed', currentLanguage) : getTranslation('inProgress', currentLanguage)}
-                        </span>
                       </div>
                       
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600 dark:text-gray-400">
@@ -940,6 +977,86 @@ const ReportsPage = ({ darkMode = false, currentLanguage = 'tr', selectedMachine
                             <div className="flex justify-between">
                               <span>{getTranslation('defectivePallets', currentLanguage)}:</span>
                               <span>{report.defectivePallets?.toLocaleString() || 0}</span>
+                            </div>
+                            {/* Kalite-Kontrol Sonrası Fire */}
+                            <div className="mt-2 pt-2 border-t border-gray-300 dark:border-gray-600">
+                              {editingWastage === report.id ? (
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-gray-700 dark:text-gray-300 min-w-[140px]">
+                                      {getTranslation('wastageAfterQualityControl', currentLanguage) || 'Kalite-Kontrol Sonrası Fire'}:
+                                    </span>
+                                  <input
+                                    type="number"
+                                    step="1"
+                                    min="0"
+                                    value={wastageInputValue}
+                                    onChange={(e) => setWastageInputValue(e.target.value)}
+                                    className="flex-1 max-w-[120px] px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="0"
+                                    autoFocus
+                                  />
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">adet</span>
+                          </div>
+                                  <div className="flex items-center gap-2 justify-end">
+                                    <button
+                                      onClick={() => handleUpdateWastageAfterQualityControl(report.id, wastageInputValue)}
+                                      disabled={savingWastage}
+                                      className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      {savingWastage ? 'Kaydediliyor...' : 'Kaydet'}
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setEditingWastage(null);
+                                        setWastageInputValue('');
+                                      }}
+                                      className="px-3 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                                    >
+                                      İptal
+                                    </button>
+                        </div>
+                                </div>
+                              ) : (
+                                <div className="flex justify-between items-center">
+                                  <span className="text-gray-700 dark:text-gray-300">
+                                    {getTranslation('wastageAfterQualityControl', currentLanguage) || 'Kalite-Kontrol Sonrası Fire'}:
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-blue-600 dark:text-blue-400">
+                                      {report.wastageAfterQualityControl !== null && report.wastageAfterQualityControl !== undefined 
+                                        ? Math.round(report.wastageAfterQualityControl).toLocaleString('tr-TR')
+                                        : '-'}
+                                    </span>
+                                    {(user?.roleSettings?.canUpdateWastageAfterQualityControl || user?.roleSettings?.CanUpdateWastageAfterQualityControl) && (
+                                      <button
+                                        onClick={() => {
+                                          setEditingWastage(report.id);
+                                          setWastageInputValue(report.wastageAfterQualityControl?.toString() || '');
+                                        }}
+                                        className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                                        title="Düzenle"
+                                      >
+                                        ✏️
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                              {report.wastageAfterQualityControlUpdatedBy && !editingWastage && (
+                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                  {getTranslation('updatedBy', currentLanguage) || 'Güncelleyen'}: {report.wastageAfterQualityControlUpdatedBy}
+                                  {report.wastageAfterQualityControlUpdatedAt && (
+                                    <span> - {new Date(report.wastageAfterQualityControlUpdatedAt).toLocaleString('tr-TR', {
+                                      year: 'numeric',
+                                      month: '2-digit',
+                                      day: '2-digit',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}</span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1697,21 +1814,13 @@ const ReportsPage = ({ darkMode = false, currentLanguage = 'tr', selectedMachine
                           <h6 className="font-semibold text-green-800 dark:text-green-200 mb-2">2. Performance (Performans)</h6>
                           <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">Gerçek üretim hızının ideal üretim hızına oranı</p>
                           <div className="bg-white dark:bg-gray-800 p-3 rounded mb-3 font-mono text-sm">
-                            Performance = (Ideal Cycle Time × Total Count) / Run Time × 100
+                            Performance = (Average Speed / Target Speed) × 100
                           </div>
                           <div className="space-y-2 text-sm">
-                            <div><span className="font-medium">Silindir Çevresi:</span> {oeeData.silindirCevresi} mm = {(oeeData.silindirCevresi / 1000).toFixed(5)} m</div>
-                            <div><span className="font-medium">Hedef Hız:</span> {oeeData.hedefHiz} m/dk</div>
-                            <div><span className="font-medium">Set Sayısı:</span> {oeeData.setSayisi} adet/tur</div>
-                            <div><span className="font-medium">Ideal Cycle Time:</span> ({(oeeData.silindirCevresi / 1000).toFixed(5)} / ({oeeData.hedefHiz} × {oeeData.setSayisi})) = {oeeData.idealCycleTime?.toFixed(8) || ((oeeData.silindirCevresi / 1000) / (oeeData.hedefHiz * oeeData.setSayisi)).toFixed(8)} dakika/adet</div>
-                            <div><span className="font-medium">Gerçek Çalışma Süresi:</span> {oeeData.gercekCalismaSuresi.toFixed(2)} dakika</div>
-                            <div><span className="font-medium">Run Time (Performance):</span> {oeeData.gercekCalismaSuresi.toFixed(2)} - {oeeData.durusSuresiDakika?.toFixed(2) || (oeeData.totalStoppageDuration / 1000 / 60).toFixed(2)} = {oeeData.runTimeForPerformance?.toFixed(2) || (oeeData.gercekCalismaSuresi - (oeeData.durusSuresiDakika || (oeeData.totalStoppageDuration / 1000 / 60))).toFixed(2)} dakika</div>
-                            <div><span className="font-medium">Gerçek Üretim:</span> {oeeData.actualProduction.toLocaleString()} adet</div>
-                            <div><span className="font-medium">Toplam Fire:</span> {oeeData.hataliUretim.toLocaleString()} adet</div>
-                            <div><span className="font-medium">Total Count (Fireler Dahil):</span> {oeeData.actualProduction.toLocaleString()} + {oeeData.hataliUretim.toLocaleString()} = {(oeeData.totalCount || (oeeData.actualProduction + oeeData.hataliUretim)).toLocaleString()} adet</div>
-                            <div><span className="font-medium">Ideal Üretim Süresi:</span> {oeeData.idealCycleTime?.toFixed(8) || ((oeeData.silindirCevresi / 1000) / (oeeData.hedefHiz * oeeData.setSayisi)).toFixed(8)} × {(oeeData.totalCount || (oeeData.actualProduction + oeeData.hataliUretim)).toLocaleString()} = {((oeeData.idealCycleTime || ((oeeData.silindirCevresi / 1000) / (oeeData.hedefHiz * oeeData.setSayisi))) * (oeeData.totalCount || (oeeData.actualProduction + oeeData.hataliUretim))).toFixed(2)} dakika</div>
+                            <div><span className="font-medium">Ortalama Hız (Average Speed):</span> {oeeData.averageSpeed?.toFixed(2) || '-'} m/dk</div>
+                            <div><span className="font-medium">Hedef Hız (Target Speed):</span> {oeeData.hedefHiz} m/dk</div>
                             <div className="font-semibold text-green-700 dark:text-green-300">
-                              Performance = ({((oeeData.idealCycleTime || ((oeeData.silindirCevresi / 1000) / (oeeData.hedefHiz * oeeData.setSayisi))) * (oeeData.totalCount || (oeeData.actualProduction + oeeData.hataliUretim))).toFixed(2)} / {oeeData.runTimeForPerformance?.toFixed(2) || (oeeData.gercekCalismaSuresi - (oeeData.durusSuresiDakika || (oeeData.totalStoppageDuration / 1000 / 60))).toFixed(2)}) × 100 = {oeeData.performance.toFixed(2)}%
+                              Performance = ({oeeData.averageSpeed?.toFixed(2) || '0'} / {oeeData.hedefHiz}) × 100 = {oeeData.performance.toFixed(2)}%
                             </div>
                           </div>
                         </div>
@@ -1724,11 +1833,13 @@ const ReportsPage = ({ darkMode = false, currentLanguage = 'tr', selectedMachine
                             Quality = (Good Count / Total Count) × 100
                           </div>
                           <div className="space-y-2 text-sm">
-                            <div><span className="font-medium">Gerçek Üretim (Good Count):</span> {oeeData.actualProduction.toLocaleString()} adet</div>
+                            <div><span className="font-medium">Gerçek Üretim:</span> {oeeData.actualProduction.toLocaleString()} adet</div>
+                            <div><span className="font-medium">Kalite-Kontrol Sonrası Fire:</span> {(oeeData.wastageAfterQualityControl || 0).toLocaleString()} adet</div>
+                            <div><span className="font-medium">Good Count:</span> {oeeData.actualProduction.toLocaleString()} - {(oeeData.wastageAfterQualityControl || 0).toLocaleString()} = {(oeeData.goodCount || (oeeData.actualProduction - (oeeData.wastageAfterQualityControl || 0))).toLocaleString()} adet</div>
                             <div><span className="font-medium">Toplam Fire:</span> {oeeData.hataliUretim.toLocaleString()} adet</div>
-                            <div><span className="font-medium">Total Count (Fireler Dahil):</span> {oeeData.actualProduction.toLocaleString()} + {oeeData.hataliUretim.toLocaleString()} = {(oeeData.totalCount || (oeeData.actualProduction + oeeData.hataliUretim)).toLocaleString()} adet</div>
+                            <div><span className="font-medium">Total Count (Fireler Dahil):</span> {oeeData.actualProduction.toLocaleString()} + {oeeData.hataliUretim.toLocaleString()} = {(oeeData.totalCountForQuality || (oeeData.actualProduction + oeeData.hataliUretim)).toLocaleString()} adet</div>
                             <div className="font-semibold text-purple-700 dark:text-purple-300">
-                              Quality = ({oeeData.actualProduction.toLocaleString()} / {(oeeData.totalCount || (oeeData.actualProduction + oeeData.hataliUretim)).toLocaleString()}) × 100 = {oeeData.quality.toFixed(2)}%
+                              Quality = ({(oeeData.goodCount || (oeeData.actualProduction - (oeeData.wastageAfterQualityControl || 0))).toLocaleString()} / {(oeeData.totalCountForQuality || (oeeData.actualProduction + oeeData.hataliUretim)).toLocaleString()}) × 100 = {oeeData.quality.toFixed(2)}%
                             </div>
                           </div>
                         </div>

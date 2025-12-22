@@ -33,6 +33,59 @@ body::-webkit-scrollbar {
   display: none;
 }
 
+/* ====== Mobile safe-area (notch) için Dashboard root padding ====== */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .dashboard-root {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+/* Grid item cursor override - kartlar normal pointer olsun */
+.react-grid-item {
+  cursor: default !important;
+  /* Scroll event'lerinin geçmesi için */
+  touch-action: pan-y;
+}
+
+.react-grid-item:hover {
+  cursor: default !important;
+}
+
+/* Drag handle'a hover olunca grid item'ın cursor'unu da grab yap - görsel titreme önleme */
+.react-grid-item .drag-handle {
+  cursor: grab !important;
+  pointer-events: auto !important;
+}
+
+.react-grid-item .drag-handle:hover {
+  cursor: grab !important;
+}
+
+.react-grid-item .drag-handle:active {
+  cursor: grabbing !important;
+}
+
+/* Drag handle aktifken grid item da grabbing olsun - inline style ile yapılıyor */
+.react-grid-item.ui-draggable-dragging {
+  cursor: grabbing !important;
+}
+
+/* Drag handle içindeki tüm child elementler pointer events none - cursor karışmasın */
+.react-grid-item .drag-handle > * {
+  pointer-events: none !important;
+}
+
+/* Drag handle dışındaki alanlar pointer events auto - normal davranış */
+.react-grid-item > *:not(.drag-handle) {
+  pointer-events: auto;
+}
+
+/* React Grid Layout'un scroll event'lerini yakalamaması için */
+.react-grid-layout {
+  /* Scroll event'leri normal şekilde çalışmalı - özel bir engelleme yok */
+  touch-action: pan-y; /* Dikey scroll'u etkinleştir */
+}
+
 .stoppage-chart-mobile {
   flex-direction: column;
 }
@@ -64,6 +117,8 @@ body::-webkit-scrollbar {
   animation: blink-glow 2s ease-in-out infinite;
   border-color: rgba(245, 158, 11, 0.5) !important;
 }
+
+/* Xmas header lights (dashboard home subtabs) - Lottie ile çözüldü, ek CSS'e gerek yok */
 
 .stoppage-chart-mobile .text-mobile {
   font-size: 0.85rem;

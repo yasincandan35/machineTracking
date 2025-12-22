@@ -14,8 +14,8 @@ export const useCardStyle = (customStyle = {}, minHeight = '120px', cardKey = nu
   }
 
   const baseClassName = isLiquidGlass 
-    ? `relative glass-card p-4 transition-all duration-300 ease-in-out cursor-pointer`
-    : `relative rounded-xl shadow-md shadow-bottom-cards p-4 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 hover:shadow-lg hover:scale-[1.01] transition-all duration-300 ease-in-out cursor-pointer`;
+    ? `relative glass-card p-4 transition-all duration-300 ease-in-out`
+    : `relative rounded-xl shadow-md shadow-bottom-cards p-4 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 hover:shadow-lg hover:scale-[1.01] transition-all duration-300 ease-in-out`;
 
   const style = isLiquidGlass ? { minHeight: finalMinHeight } : { ...customStyle, minHeight: finalMinHeight };
 

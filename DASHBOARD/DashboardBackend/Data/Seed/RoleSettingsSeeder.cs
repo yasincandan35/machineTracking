@@ -52,6 +52,7 @@ namespace DashboardBackend.Data.Seed
                 CanCreateUsers = true,
                 CanDeleteUsers = true,
                 CanManageRoles = true,
+                CanUpdateWastageAfterQualityControl = true,
                 AllowedSections = AllSections.ToList()
             },
             new RoleSetting
@@ -102,6 +103,7 @@ namespace DashboardBackend.Data.Seed
                 CanCreateUsers = false,
                 CanDeleteUsers = false,
                 CanManageRoles = false,
+                CanUpdateWastageAfterQualityControl = true,
                 AllowedSections = Sections("temperatureHumidity")
             },
             new RoleSetting
@@ -143,6 +145,7 @@ BEGIN
         [CanCreateUsers] BIT NOT NULL CONSTRAINT [DF_RoleSettings_CanCreateUsers] DEFAULT (0),
         [CanDeleteUsers] BIT NOT NULL CONSTRAINT [DF_RoleSettings_CanDeleteUsers] DEFAULT (0),
         [CanManageRoles] BIT NOT NULL CONSTRAINT [DF_RoleSettings_CanManageRoles] DEFAULT (0),
+        [CanUpdateWastageAfterQualityControl] BIT NOT NULL CONSTRAINT [DF_RoleSettings_CanUpdateWastageAfterQualityControl] DEFAULT (0),
         [AllowedSections] NVARCHAR(MAX) NULL
     );
 END
@@ -151,6 +154,11 @@ BEGIN
     IF COL_LENGTH('RoleSettings', 'AllowedSections') IS NULL
     BEGIN
         ALTER TABLE [dbo].[RoleSettings] ADD [AllowedSections] NVARCHAR(MAX) NULL;
+    END
+    
+    IF COL_LENGTH('RoleSettings', 'CanUpdateWastageAfterQualityControl') IS NULL
+    BEGIN
+        ALTER TABLE [dbo].[RoleSettings] ADD [CanUpdateWastageAfterQualityControl] BIT NOT NULL DEFAULT (0);
     END
 END
 ");
@@ -171,6 +179,7 @@ END
                     CanCreateUsers = r.CanCreateUsers,
                     CanDeleteUsers = r.CanDeleteUsers,
                     CanManageRoles = r.CanManageRoles,
+                    CanUpdateWastageAfterQualityControl = r.CanUpdateWastageAfterQualityControl,
                     AllowedSections = r.AllowedSections
                 }).ToList();
 

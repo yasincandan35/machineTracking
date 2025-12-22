@@ -77,6 +77,7 @@ const Sidebar = ({ current, onChange = () => {}, isHovered, setIsHovered, backgr
         }`}
         style={{ 
           width: sidebarWidth,
+          paddingTop: 'env(safe-area-inset-top, 0px)',
           ...(isFluid ? {
             background: 'rgba(0, 0, 0, 0.5)',
             backdropFilter: 'blur(15px)',
@@ -135,6 +136,7 @@ const Sidebar = ({ current, onChange = () => {}, isHovered, setIsHovered, backgr
         }`}
         style={{ 
           width: "4rem",
+          paddingTop: 'env(safe-area-inset-top, 0px)',
           ...(isFluid ? {
             background: 'rgba(0, 0, 0, 0.5)',
             backdropFilter: 'blur(15px)',

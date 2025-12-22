@@ -163,6 +163,11 @@ namespace DashboardBackend.Controllers
                             ) AS energy_consumption_kwh,
                             total_energy_kwh_start,
                             total_energy_kwh_end,
+                            average_speed, run_time_seconds,
+                            total_wastage_package, total_wastage_meters,
+                            wastage_after_quality_control,
+                            wastage_after_quality_control_updated_by,
+                            wastage_after_quality_control_updated_at,
                             job_start_time, job_end_time, created_at
                         FROM JobEndReports 
                         ORDER BY created_at DESC"
@@ -172,7 +177,13 @@ namespace DashboardBackend.Controllers
                             bundle, silindir_cevresi, hedef_hiz, ethyl_alcohol_consumption, ethyl_acetate_consumption,
                             paper_consumption, actual_production, remaining_work, wastage_before_die, wastage_after_die,
                             wastage_ratio, total_stoppage_duration, over_production, completion_percentage,
-                            energy_consumption_kwh, job_start_time, job_end_time, created_at
+                            energy_consumption_kwh,
+                            average_speed, run_time_seconds,
+                            total_wastage_package, total_wastage_meters,
+                            wastage_after_quality_control,
+                            wastage_after_quality_control_updated_by,
+                            wastage_after_quality_control_updated_at,
+                            job_start_time, job_end_time, created_at
                         FROM JobEndReports 
                         ORDER BY created_at DESC";
 
@@ -217,6 +228,13 @@ namespace DashboardBackend.Controllers
                         energyConsumptionKwh = reader["energy_consumption_kwh"],
                         totalEnergyKwhStart = hasEnergyTotals ? reader["total_energy_kwh_start"] : null,
                         totalEnergyKwhEnd = hasEnergyTotals ? reader["total_energy_kwh_end"] : null,
+                        averageSpeed = reader["average_speed"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["average_speed"]),
+                        runTimeSeconds = reader["run_time_seconds"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["run_time_seconds"]),
+                        totalWastagePackage = reader["total_wastage_package"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["total_wastage_package"]),
+                        totalWastageMeters = reader["total_wastage_meters"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["total_wastage_meters"]),
+                        wastageAfterQualityControl = reader["wastage_after_quality_control"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["wastage_after_quality_control"]),
+                        wastageAfterQualityControlUpdatedBy = reader["wastage_after_quality_control_updated_by"] == DBNull.Value ? null : reader["wastage_after_quality_control_updated_by"]?.ToString(),
+                        wastageAfterQualityControlUpdatedAt = reader["wastage_after_quality_control_updated_at"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(reader["wastage_after_quality_control_updated_at"]),
                         jobStartTime = reader["job_start_time"],
                         jobEndTime = reader["job_end_time"],
                         createdAt = reader["created_at"]
@@ -524,6 +542,150 @@ namespace DashboardBackend.Controllers
             }
         }
 
+        [HttpPut("wastage-after-quality-control/{reportId}")]
+        public async Task<IActionResult> UpdateWastageAfterQualityControl(int reportId, [FromBody] UpdateWastageRequest request, [FromQuery] string? machine = null)
+        {
+            try
+            {
+                // Kullanıcı kontrolü
+                var currentUser = await GetCurrentUserAsync();
+                if (currentUser == null)
+                {
+                    return Unauthorized(new { success = false, error = "Kullanıcı bulunamadı" });
+                }
+
+                // Rol kontrolü - wastageAfterQualityControl giriş yetkisi
+                var normalizedRole = currentUser.Role?.Trim().ToLowerInvariant();
+                if (string.IsNullOrWhiteSpace(normalizedRole))
+                {
+                    return StatusCode(403, new { success = false, error = "Kullanıcı rolü bulunamadı" });
+                }
+
+                var roleSetting = await _dashboardContext.RoleSettings
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(r => r.Name == normalizedRole);
+
+                if (roleSetting == null || !roleSetting.CanUpdateWastageAfterQualityControl)
+                {
+                    return StatusCode(403, new { success = false, error = "Bu işlem için yetkiniz bulunmamaktadır" });
+                }
+                
+                var connectionInfo = await GetConnectionInfoAsync(machine);
+                await using var connection = new SqlConnection(connectionInfo.ConnectionString);
+                await connection.OpenAsync();
+
+                // Önce mevcut kaydı kontrol et ve gerekli değerleri al
+                var checkQuery = @"
+                    SELECT id, siparis_no, wastage_after_die, wastage_before_die, set_sayisi, silindir_cevresi, wastage_after_quality_control
+                    FROM JobEndReports 
+                    WHERE id = @reportId";
+                using var checkCmd = new SqlCommand(checkQuery, connection);
+                checkCmd.Parameters.AddWithValue("@reportId", reportId);
+                
+                decimal? oldWastageAfterQualityControl = null;
+                decimal? wastageAfterDie = null;
+                decimal? wastageBeforeDie = null;
+                int? setSayisi = null;
+                string? silindirCevresi = null;
+                
+                using var reader = await checkCmd.ExecuteReaderAsync();
+                if (!await reader.ReadAsync())
+                {
+                    return NotFound(new { success = false, error = "Rapor bulunamadı" });
+                }
+                
+                // Mevcut değerleri al
+                if (reader["wastage_after_die"] != DBNull.Value)
+                    wastageAfterDie = Convert.ToDecimal(reader["wastage_after_die"]);
+                if (reader["wastage_before_die"] != DBNull.Value)
+                    wastageBeforeDie = Convert.ToDecimal(reader["wastage_before_die"]);
+                if (reader["set_sayisi"] != DBNull.Value)
+                    setSayisi = Convert.ToInt32(reader["set_sayisi"]);
+                if (reader["silindir_cevresi"] != DBNull.Value)
+                    silindirCevresi = reader["silindir_cevresi"].ToString();
+                if (reader["wastage_after_quality_control"] != DBNull.Value)
+                    oldWastageAfterQualityControl = Convert.ToDecimal(reader["wastage_after_quality_control"]);
+                
+                reader.Close();
+
+                // total_wastage_package'i hesapla
+                // totalWastagePackage = wastageAfterDie + ((wastageBeforeDie*1000/silindir_cevresi)*set_sayisi) + wastageAfterQualityControl
+                decimal? newTotalWastagePackage = null;
+                if (wastageAfterDie.HasValue && wastageBeforeDie.HasValue && setSayisi.HasValue && setSayisi.Value > 0 && !string.IsNullOrEmpty(silindirCevresi))
+                {
+                    try
+                    {
+                        var silindirCevresiDecimal = decimal.Parse(silindirCevresi.Replace(",", "."), System.Globalization.CultureInfo.InvariantCulture);
+                        if (silindirCevresiDecimal > 0)
+                        {
+                            var basePackage = wastageAfterDie.Value + ((wastageBeforeDie.Value * 1000 / silindirCevresiDecimal) * setSayisi.Value);
+                            newTotalWastagePackage = basePackage + request.wastageAfterQualityControl;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "total_wastage_package hesaplanırken hata oluştu");
+                    }
+                }
+
+                // Güncelleme sorgusu
+                var updateQuery = @"
+                    UPDATE JobEndReports 
+                    SET wastage_after_quality_control = @wastageAfterQualityControl,
+                        wastage_after_quality_control_updated_by = @updatedBy,
+                        wastage_after_quality_control_updated_at = @updatedAt" +
+                    (newTotalWastagePackage.HasValue ? ", total_wastage_package = @totalWastagePackage" : "") + @"
+                    WHERE id = @reportId";
+
+                using var updateCmd = new SqlCommand(updateQuery, connection);
+                updateCmd.Parameters.AddWithValue("@reportId", reportId);
+                updateCmd.Parameters.AddWithValue("@wastageAfterQualityControl", request.wastageAfterQualityControl);
+                updateCmd.Parameters.AddWithValue("@updatedBy", currentUser.Username ?? "Unknown");
+                updateCmd.Parameters.AddWithValue("@updatedAt", DateTime.UtcNow);
+                if (newTotalWastagePackage.HasValue)
+                {
+                    updateCmd.Parameters.AddWithValue("@totalWastagePackage", newTotalWastagePackage.Value);
+                }
+
+                var rowsAffected = await updateCmd.ExecuteNonQueryAsync();
+
+                if (rowsAffected > 0)
+                {
+                    return Ok(new
+                    {
+                        success = true,
+                        message = "Kalite kontrol sonrası fire güncellendi",
+                        data = new
+                        {
+                            reportId,
+                            wastageAfterQualityControl = request.wastageAfterQualityControl,
+                            updatedBy = currentUser.Username,
+                            updatedAt = DateTime.UtcNow
+                        }
+                    });
+                }
+                else
+                {
+                    return BadRequest(new { success = false, error = "Güncelleme başarısız" });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Kalite kontrol sonrası fire güncelleme hatası: {ReportId}", reportId);
+                return StatusCode(500, new
+                {
+                    success = false,
+                    error = "Güncelleme sırasında hata oluştu",
+                    message = ex.Message
+                });
+            }
+        }
+
+        public class UpdateWastageRequest
+        {
+            public decimal wastageAfterQualityControl { get; set; }
+        }
+
         [HttpGet("oee-calculation/{reportId}")]
         public async Task<IActionResult> GetOEECalculation(int reportId, [FromQuery] string? machine = null)
         {
@@ -545,7 +707,11 @@ namespace DashboardBackend.Controllers
                         actual_production,
                         wastage_before_die,
                         wastage_after_die,
+                        wastage_after_quality_control,
+                        average_speed,
                         total_stoppage_duration,
+                        planned_production_time,
+                        setup,
                         job_start_time,
                         job_end_time
                     FROM JobEndReports 
@@ -565,7 +731,9 @@ namespace DashboardBackend.Controllers
                     var actualProduction = Convert.ToInt32(reader["actual_production"]);
                     var wastageBeforeDie = decimal.Parse(reader["wastage_before_die"].ToString().Replace(",", "."), System.Globalization.CultureInfo.InvariantCulture);
                     var wastageAfterDie = decimal.Parse(reader["wastage_after_die"].ToString().Replace(",", "."), System.Globalization.CultureInfo.InvariantCulture);
+                    var wastageAfterQualityControl = reader["wastage_after_quality_control"] == DBNull.Value ? 0m : decimal.Parse(reader["wastage_after_quality_control"].ToString().Replace(",", "."), System.Globalization.CultureInfo.InvariantCulture);
                     var totalStoppageDuration = decimal.Parse(reader["total_stoppage_duration"].ToString().Replace(",", "."), System.Globalization.CultureInfo.InvariantCulture);
+                    var averageSpeed = reader["average_speed"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["average_speed"]);
                     var jobStartTime = Convert.ToDateTime(reader["job_start_time"]);
                     var jobEndTime = Convert.ToDateTime(reader["job_end_time"]);
 
@@ -607,27 +775,45 @@ namespace DashboardBackend.Controllers
                     
                     // OEE Bileşenleri - Standart OEE Formülleri
                     
-                    // 1. Availability = Run Time / Planned Production Time
-                    // Run Time (Availability için) = Planned Production Time - Downtime
-                    var runTimeForAvailability = planlananSure - durusSuresiDakika;
-                    if (runTimeForAvailability < 0) runTimeForAvailability = 0;
-                    var availability = planlananSure > 0 ? (runTimeForAvailability / planlananSure) * 100 : 0;
+                    // 1. Availability = (Runtime / Planned Production Time) × 100
+                    // Runtime = Planned Production Time - Downtime
+                    // NOT: Buradaki "Runtime" run_time_seconds ile KARIŞTIRILMAMALI!
+                    // - run_time_seconds: 65 m/dk üstü çalışma süresi (saniye cinsinden, performans için)
+                    // - Availability Runtime: Planlanan süre - Duruş süresi (dakika cinsinden, availability için)
+                    // Planned Production Time = planlananSure (setup dahil, dakika cinsinden)
+                    var plannedProductionTime = reader["planned_production_time"] == DBNull.Value 
+                        ? (decimal?)null 
+                        : Convert.ToDecimal(reader["planned_production_time"]);
                     
-                    // 2. Performance = (Ideal Cycle Time × Total Count) / Run Time
-                    // Run Time (Performance için) = Actual Operating Time - Downtime
-                    // Ideal Cycle Time = (Silindir Çevresi / 1000) / (Hedef Hız × Set Sayısı)
-                    // Total Count = Gerçek Üretim + Fireler (toplam üretilen adet)
-                    var runTimeForPerformance = gercekCalismaSuresi - durusSuresiDakika;
-                    if (runTimeForPerformance < 0) runTimeForPerformance = 0;
-                    var idealCycleTime = (silindirCevresi / 1000) / (hedefHiz * setSayisi);
-                    var totalCount = (decimal)actualProduction + hataliUretim; // Fireler dahil toplam üretim
-                    var performance = runTimeForPerformance > 0 ? (idealCycleTime * totalCount) / runTimeForPerformance * 100 : 0;
+                    // Eğer planned_production_time yoksa hesapla (dakika cinsinden)
+                    if (!plannedProductionTime.HasValue)
+                    {
+                        // Mevcut hesaplanacakMiktar, adim1, adim2, adim3 değerlerini kullan
+                        var setup = reader["setup"] == DBNull.Value ? 0m : Convert.ToDecimal(reader["setup"]);
+                        plannedProductionTime = planlananSure + setup; // Setup dahil, dakika cinsinden
+                    }
+                    
+                    // Availability Runtime = Planned Production Time - Downtime (ikisi de dakika cinsinden)
+                    var availabilityRuntime = plannedProductionTime.HasValue ? plannedProductionTime.Value - durusSuresiDakika : 0;
+                    if (availabilityRuntime < 0) availabilityRuntime = 0;
+                    var availability = plannedProductionTime.HasValue && plannedProductionTime.Value > 0 
+                        ? (availabilityRuntime / plannedProductionTime.Value) * 100 
+                        : 0;
+                    
+                    // 2. Performance = (Average Speed / Target Speed) × 100
+                    // average_speed zaten hesaplanmış (65 m/dk üstü hızlardan, m/dk cinsinden)
+                    // hedefHiz = target speed (m/dk cinsinden)
+                    var performance = (averageSpeed.HasValue && averageSpeed.Value > 0 && hedefHiz > 0) 
+                        ? (averageSpeed.Value / hedefHiz) * 100 
+                        : 0;
+                    if (performance > 100) performance = 100; // %100'ü geçemez
                     
                     // 3. Quality = Good Count / Total Count
                     // Total Count = Gerçek Üretim + Fireler (toplam üretilen adet)
-                    // Good Count = Gerçek Üretim (fireler hariç)
+                    // Good Count = Gerçek Üretim - Kalite Kontrol Sonrası Fire (wastageAfterQualityControl)
                     var totalCountForQuality = (decimal)actualProduction + hataliUretim; // Fireler dahil toplam üretim
-                    var goodCount = (decimal)actualProduction; // Fireler hariç iyi üretim
+                    var goodCount = (decimal)actualProduction - wastageAfterQualityControl; // Kalite kontrol sonrası fireler düşülmüş iyi üretim
+                    if (goodCount < 0) goodCount = 0; // Negatif olamaz
                     var quality = totalCountForQuality > 0 ? (goodCount / totalCountForQuality) * 100 : 0;
                     
                     // 4. Genel OEE
@@ -640,22 +826,23 @@ namespace DashboardBackend.Controllers
                         setSayisi = setSayisi,
                         silindirCevresi = silindirCevresi,
                         hedefHiz = hedefHiz,
+                        averageSpeed = averageSpeed.HasValue ? Math.Round(averageSpeed.Value, 2) : (decimal?)null,
                         actualProduction = actualProduction,
                         wastageBeforeDie = wastageBeforeDie,
                         wastageAfterDie = wastageAfterDie,
+                        wastageAfterQualityControl = wastageAfterQualityControl,
                         totalStoppageDuration = totalStoppageDuration,
                         
                         // Hesaplanan Değerler
                         planlananSure = Math.Round(planlananSure, 2),
+                        plannedProductionTime = plannedProductionTime.HasValue ? Math.Round(plannedProductionTime.Value, 2) : (decimal?)null,
                         gercekCalismaSuresi = Math.Round(gercekCalismaSuresi, 2),
                         hedefUretim = hedefUretim,
                         dieOncesiAdet = Math.Round(dieOncesiAdet, 0),
                         hataliUretim = Math.Round(hataliUretim, 0),
-                        runTimeForAvailability = Math.Round(runTimeForAvailability, 2),
-                        runTimeForPerformance = Math.Round(runTimeForPerformance, 2),
-                        idealCycleTime = Math.Round(idealCycleTime, 8),
+                        availabilityRuntime = Math.Round(availabilityRuntime, 2),
                         durusSuresiDakika = Math.Round(durusSuresiDakika, 2),
-                        totalCount = Math.Round(totalCount, 0),
+                        totalCountForQuality = Math.Round(totalCountForQuality, 0),
                         goodCount = Math.Round(goodCount, 0),
                         
                         // OEE Bileşenleri
@@ -1060,22 +1247,44 @@ namespace DashboardBackend.Controllers
 
                 var connectionInfo = await GetConnectionInfoAsync(machine);
 
-                // Period'a göre start ve end tarihlerini belirle
+                // Period'a göre start ve end tarihlerini (lokal zamana göre) belirle
+                // Frontend'den gelen tarihler UTC olarak geliyor, bunları local time'a çevir
                 var now = DateTime.Now;
+                DateTime? startLocal = null;
+                DateTime? endLocal = null;
+                
+                if (start.HasValue)
+                {
+                    // DateTime.Kind Unspecified ise UTC olarak kabul et
+                    var startUtc = start.Value.Kind == DateTimeKind.Utc 
+                        ? start.Value 
+                        : DateTime.SpecifyKind(start.Value, DateTimeKind.Utc);
+                    startLocal = startUtc.ToLocalTime();
+                }
+                
+                if (end.HasValue)
+                {
+                    // DateTime.Kind Unspecified ise UTC olarak kabul et
+                    var endUtc = end.Value.Kind == DateTimeKind.Utc 
+                        ? end.Value 
+                        : DateTime.SpecifyKind(end.Value, DateTimeKind.Utc);
+                    endLocal = endUtc.ToLocalTime();
+                }
+                
                 DateTime periodStart, periodEnd;
 
                 switch (period.ToLower())
                 {
                     case "daily":
-                        periodStart = start ?? now.Date;
-                        periodEnd = end ?? periodStart.AddDays(1).AddTicks(-1);
+                        periodStart = startLocal ?? now.Date;
+                        periodEnd = endLocal ?? periodStart.AddDays(1).AddTicks(-1);
                         break;
                     case "weekly":
-                        if (start.HasValue)
+                        if (startLocal.HasValue)
                         {
                             // Haftanın başlangıcı (Pazartesi)
-                            var daysToSubtract = (int)start.Value.DayOfWeek - (int)DayOfWeek.Monday;
-                            periodStart = start.Value.Date.AddDays(-daysToSubtract);
+                            var daysToSubtract = (int)startLocal.Value.DayOfWeek - (int)DayOfWeek.Monday;
+                            periodStart = startLocal.Value.Date.AddDays(-daysToSubtract);
                         }
                         else
                         {
@@ -1083,34 +1292,34 @@ namespace DashboardBackend.Controllers
                             var daysToSubtract = (int)now.DayOfWeek - (int)DayOfWeek.Monday;
                             periodStart = now.Date.AddDays(-daysToSubtract);
                         }
-                        periodEnd = end ?? periodStart.AddDays(7).AddTicks(-1);
+                        periodEnd = endLocal ?? periodStart.AddDays(7).AddTicks(-1);
                         break;
                     case "monthly":
-                        if (start.HasValue)
-                            periodStart = new DateTime(start.Value.Year, start.Value.Month, 1);
+                        if (startLocal.HasValue)
+                            periodStart = new DateTime(startLocal.Value.Year, startLocal.Value.Month, 1);
                         else
                             periodStart = new DateTime(now.Year, now.Month, 1);
-                        periodEnd = end ?? periodStart.AddMonths(1).AddTicks(-1);
+                        periodEnd = endLocal ?? periodStart.AddMonths(1).AddTicks(-1);
                         break;
                     case "quarterly":
-                        if (start.HasValue)
+                        if (startLocal.HasValue)
                         {
-                            var quarterMonth = ((start.Value.Month - 1) / 3) * 3 + 1;
-                            periodStart = new DateTime(start.Value.Year, quarterMonth, 1);
+                            var quarterMonth = ((startLocal.Value.Month - 1) / 3) * 3 + 1;
+                            periodStart = new DateTime(startLocal.Value.Year, quarterMonth, 1);
                         }
                         else
                         {
                             var quarterMonth = ((now.Month - 1) / 3) * 3 + 1;
                             periodStart = new DateTime(now.Year, quarterMonth, 1);
                         }
-                        periodEnd = end ?? periodStart.AddMonths(3).AddTicks(-1);
+                        periodEnd = endLocal ?? periodStart.AddMonths(3).AddTicks(-1);
                         break;
                     case "yearly":
-                        if (start.HasValue)
-                            periodStart = new DateTime(start.Value.Year, 1, 1);
+                        if (startLocal.HasValue)
+                            periodStart = new DateTime(startLocal.Value.Year, 1, 1);
                         else
                             periodStart = new DateTime(now.Year, 1, 1);
-                        periodEnd = end ?? periodStart.AddYears(1).AddTicks(-1);
+                        periodEnd = endLocal ?? periodStart.AddYears(1).AddTicks(-1);
                         break;
                     default:
                         periodStart = now.Date;
@@ -1122,8 +1331,11 @@ namespace DashboardBackend.Controllers
                 await connection.OpenAsync();
 
                 // Dönem başı snapshot'ını bul
-                var snapshotDate = periodStart;
-                var snapshotQuery = @"
+                // Bugün için: Bugünün snapshot'ı varsa onu kullan, yoksa dünün son snapshot'ını kullan
+                var snapshotStartDate = periodStart;
+                var isTodayPeriod = period.ToLower() == "daily" && periodEnd.Date >= now.Date;
+                
+                var snapshotStartQuery = @"
                     SELECT TOP 1 
                         CAST(COALESCE(actual_production, 0) AS DECIMAL(18,2)) AS actual_production,
                         CAST(COALESCE(total_stoppage_duration, 0) AS DECIMAL(18,2)) AS total_stoppage_duration,
@@ -1134,41 +1346,101 @@ namespace DashboardBackend.Controllers
                         CAST(COALESCE(ethyl_alcohol_consumption, 0) AS DECIMAL(18,2)) AS ethyl_alcohol_consumption,
                         CAST(COALESCE(ethyl_acetate_consumption, 0) AS DECIMAL(18,2)) AS ethyl_acetate_consumption,
                         siparis_no,
-                        cycle_start_time
+                        cycle_start_time,
+                        full_live_data
                     FROM PeriodicSnapshots
                     WHERE snapshot_type = @snapshotType AND snapshot_date <= @snapshotDate
                     ORDER BY snapshot_date DESC";
 
-                using var snapshotCmd = new SqlCommand(snapshotQuery, connection);
-                snapshotCmd.Parameters.AddWithValue("@snapshotType", period.ToLower());
-                snapshotCmd.Parameters.AddWithValue("@snapshotDate", snapshotDate);
+                using var snapshotStartCmd = new SqlCommand(snapshotStartQuery, connection);
+                snapshotStartCmd.Parameters.AddWithValue("@snapshotType", period.ToLower());
+                snapshotStartCmd.Parameters.AddWithValue("@snapshotDate", snapshotStartDate);
 
-                decimal? snapshotProduction = null;
-                decimal? snapshotStoppage = null;
-                decimal? snapshotEnergy = null;
-                decimal? snapshotWastageBefore = null;
-                decimal? snapshotWastageAfter = null;
-                decimal? snapshotPaper = null;
-                decimal? snapshotEthylAlcohol = null;
-                decimal? snapshotEthylAcetate = null;
-                string? snapshotSiparisNo = null;
-                DateTime? snapshotCycleStartTime = null;
+                decimal? snapshotStartProduction = null;
+                decimal? snapshotStartStoppage = null;
+                decimal? snapshotStartEnergy = null;
+                decimal? snapshotStartWastageBefore = null;
+                decimal? snapshotStartWastageAfter = null;
+                decimal? snapshotStartPaper = null;
+                decimal? snapshotStartEthylAlcohol = null;
+                decimal? snapshotStartEthylAcetate = null;
+                string? snapshotStartSiparisNo = null;
+                DateTime? snapshotStartCycleStartTime = null;
+                string? snapshotStartFullLiveData = null;
 
-                using var snapshotReader = await snapshotCmd.ExecuteReaderAsync();
-                if (await snapshotReader.ReadAsync())
+                using var snapshotStartReader = await snapshotStartCmd.ExecuteReaderAsync();
+                if (await snapshotStartReader.ReadAsync())
                 {
-                    snapshotProduction = snapshotReader.IsDBNull(0) ? null : snapshotReader.GetDecimal(0);
-                    snapshotStoppage = snapshotReader.IsDBNull(1) ? null : snapshotReader.GetDecimal(1);
-                    snapshotEnergy = snapshotReader.IsDBNull(2) ? null : snapshotReader.GetDecimal(2);
-                    snapshotWastageBefore = snapshotReader.IsDBNull(3) ? null : snapshotReader.GetDecimal(3);
-                    snapshotWastageAfter = snapshotReader.IsDBNull(4) ? null : snapshotReader.GetDecimal(4);
-                    snapshotPaper = snapshotReader.IsDBNull(5) ? null : snapshotReader.GetDecimal(5);
-                    snapshotEthylAlcohol = snapshotReader.IsDBNull(6) ? null : snapshotReader.GetDecimal(6);
-                    snapshotEthylAcetate = snapshotReader.IsDBNull(7) ? null : snapshotReader.GetDecimal(7);
-                    snapshotSiparisNo = snapshotReader.IsDBNull(8) ? null : snapshotReader.GetString(8);
-                    snapshotCycleStartTime = snapshotReader.IsDBNull(9) ? null : snapshotReader.GetDateTime(9);
+                    snapshotStartProduction = snapshotStartReader.IsDBNull(0) ? null : snapshotStartReader.GetDecimal(0);
+                    snapshotStartStoppage = snapshotStartReader.IsDBNull(1) ? null : snapshotStartReader.GetDecimal(1);
+                    snapshotStartEnergy = snapshotStartReader.IsDBNull(2) ? null : snapshotStartReader.GetDecimal(2);
+                    snapshotStartWastageBefore = snapshotStartReader.IsDBNull(3) ? null : snapshotStartReader.GetDecimal(3);
+                    snapshotStartWastageAfter = snapshotStartReader.IsDBNull(4) ? null : snapshotStartReader.GetDecimal(4);
+                    snapshotStartPaper = snapshotStartReader.IsDBNull(5) ? null : snapshotStartReader.GetDecimal(5);
+                    snapshotStartEthylAlcohol = snapshotStartReader.IsDBNull(6) ? null : snapshotStartReader.GetDecimal(6);
+                    snapshotStartEthylAcetate = snapshotStartReader.IsDBNull(7) ? null : snapshotStartReader.GetDecimal(7);
+                    snapshotStartSiparisNo = snapshotStartReader.IsDBNull(8) ? null : snapshotStartReader.GetString(8);
+                    snapshotStartCycleStartTime = snapshotStartReader.IsDBNull(9) ? null : snapshotStartReader.GetDateTime(9);
+                    snapshotStartFullLiveData = snapshotStartReader.IsDBNull(10) ? null : snapshotStartReader.GetString(10);
                 }
-                snapshotReader.Close();
+                snapshotStartReader.Close();
+
+                // Dönem sonu snapshot'ını bul (OEE hesaplaması için gerekli)
+                // Not: Kapanış için periyot SONRASINDA alınan ilk snapshot'ı kullanıyoruz
+                // Örn. günlük için: 14 Aralık günü -> 15 Aralık 00:00 snapshot'ı
+                var snapshotEndDate = periodEnd;
+                var snapshotEndQuery = @"
+                    SELECT TOP 1 
+                        CAST(COALESCE(actual_production, 0) AS DECIMAL(18,2)) AS actual_production,
+                        CAST(COALESCE(total_stoppage_duration, 0) AS DECIMAL(18,2)) AS total_stoppage_duration,
+                        CAST(COALESCE(energy_consumption_kwh, 0) AS DECIMAL(18,2)) AS energy_consumption_kwh,
+                        CAST(COALESCE(wastage_before_die, 0) AS DECIMAL(18,2)) AS wastage_before_die,
+                        CAST(COALESCE(wastage_after_die, 0) AS DECIMAL(18,2)) AS wastage_after_die,
+                        siparis_no,
+                        cycle_start_time,
+                        full_live_data
+                    FROM PeriodicSnapshots
+                    WHERE snapshot_type = @snapshotType AND snapshot_date >= @snapshotDate
+                    ORDER BY snapshot_date ASC";
+
+                using var snapshotEndCmd = new SqlCommand(snapshotEndQuery, connection);
+                snapshotEndCmd.Parameters.AddWithValue("@snapshotType", period.ToLower());
+                snapshotEndCmd.Parameters.AddWithValue("@snapshotDate", snapshotEndDate);
+
+                decimal? snapshotEndProduction = null;
+                decimal? snapshotEndStoppage = null;
+                decimal? snapshotEndEnergy = null;
+                decimal? snapshotEndWastageBefore = null;
+                decimal? snapshotEndWastageAfter = null;
+                string? snapshotEndSiparisNo = null;
+                DateTime? snapshotEndCycleStartTime = null;
+                string? snapshotEndFullLiveData = null;
+
+                using var snapshotEndReader = await snapshotEndCmd.ExecuteReaderAsync();
+                if (await snapshotEndReader.ReadAsync())
+                {
+                    snapshotEndProduction = snapshotEndReader.IsDBNull(0) ? null : snapshotEndReader.GetDecimal(0);
+                    snapshotEndStoppage = snapshotEndReader.IsDBNull(1) ? null : snapshotEndReader.GetDecimal(1);
+                    snapshotEndEnergy = snapshotEndReader.IsDBNull(2) ? null : snapshotEndReader.GetDecimal(2);
+                    snapshotEndWastageBefore = snapshotEndReader.IsDBNull(3) ? null : snapshotEndReader.GetDecimal(3);
+                    snapshotEndWastageAfter = snapshotEndReader.IsDBNull(4) ? null : snapshotEndReader.GetDecimal(4);
+                    snapshotEndSiparisNo = snapshotEndReader.IsDBNull(5) ? null : snapshotEndReader.GetString(5);
+                    snapshotEndCycleStartTime = snapshotEndReader.IsDBNull(6) ? null : snapshotEndReader.GetDateTime(6);
+                    snapshotEndFullLiveData = snapshotEndReader.IsDBNull(7) ? null : snapshotEndReader.GetString(7);
+                }
+                snapshotEndReader.Close();
+
+                // Eski değişken isimlerini yeni isimlerle değiştir (geriye dönük uyumluluk için)
+                var snapshotProduction = snapshotStartProduction;
+                var snapshotStoppage = snapshotStartStoppage;
+                var snapshotEnergy = snapshotStartEnergy;
+                var snapshotWastageBefore = snapshotStartWastageBefore;
+                var snapshotWastageAfter = snapshotStartWastageAfter;
+                var snapshotPaper = snapshotStartPaper;
+                var snapshotEthylAlcohol = snapshotStartEthylAlcohol;
+                var snapshotEthylAcetate = snapshotStartEthylAcetate;
+                var snapshotSiparisNo = snapshotStartSiparisNo;
+                var snapshotCycleStartTime = snapshotStartCycleStartTime;
 
                 // Dönem içinde biten işleri al (Performance hesaplaması için hedef_hiz de gerekli)
                 var completedJobsQuery = @"
@@ -1289,206 +1561,191 @@ namespace DashboardBackend.Controllers
                 }
                 fullPeriodReader.Close();
 
-                // Canlı veriyi çek (devam eden işler için)
-                decimal? liveProduction = null;
-                decimal? liveStoppage = null;
-                decimal? liveEnergy = null;
-                decimal? liveWastageBefore = null;
-                decimal? liveWastageAfter = null;
-                double? liveOverallOEE = null;
-                double? liveAvailability = null;
-                double? livePerformance = null;
-                double? liveQuality = null;
+                // Toplam hesaplama - Snapshot bazlı
+                // Mantık: Periyot içindeki toplam değerler = Periyot sonu snapshot'ı - Periyot başı snapshot'ı
+                // Bugün için: Canlı veriler - Bugünün başındaki snapshot
                 
-                if (!string.IsNullOrEmpty(machine))
+                decimal totalProduction = 0;
+                decimal totalStoppage = 0;
+                decimal totalEnergy = 0;
+                decimal totalWastageBefore = 0;
+                decimal totalWastageAfter = 0;
+                decimal totalPaper = 0;
+                decimal totalEthylAlcohol = 0;
+                decimal totalEthylAcetate = 0;
+                
+                // Bugün için özel durum: Her zaman canlı verilerden bugünün başındaki snapshot'ı çıkar
+                bool isToday = period.ToLower() == "daily" && periodEnd.Date >= now.Date;
+                bool liveDataFetched = false;
+                
+                if (isToday && snapshotStartProduction.HasValue && !string.IsNullOrEmpty(connectionInfo.TableName))
                 {
+                    // Bugün için: Canlı verilerden bugünün başındaki snapshot'ı çıkar
                     try
                     {
                         var httpClient = _httpClientFactory.CreateClient();
-                        var baseUrl = $"{Request.Scheme}://{Request.Host}";
-                        var liveDataUrl = $"{baseUrl}/api/plcdata/data?machine={Uri.EscapeDataString(machine)}";
+                        var apiBaseUrl = _configuration["ApiBaseUrl"] ?? "http://localhost:5199";
+                        var url = $"{apiBaseUrl}/api/plcdata/data?machine={Uri.EscapeDataString(connectionInfo.TableName)}";
+                        var response = await httpClient.GetAsync(url);
                         
-                        var response = await httpClient.GetAsync(liveDataUrl);
                         if (response.IsSuccessStatusCode)
                         {
-                            var liveData = await response.Content.ReadFromJsonAsync<JsonElement>();
+                            var jsonString = await response.Content.ReadAsStringAsync();
+                            var jsonDoc = JsonDocument.Parse(jsonString);
+                            var root = jsonDoc.RootElement;
                             
-                            // Aktif işin siparis_no ve cycle_start_time'ını kontrol et (yeni iş başladı mı?)
+                            var liveProduction = root.TryGetProperty("actualProduction", out var prodEl) ? prodEl.GetInt32() : 0;
+                            long liveStoppage = 0;
+                            if (root.TryGetProperty("totalStoppageDuration", out var stopEl))
+                            {
+                                if (stopEl.ValueKind == System.Text.Json.JsonValueKind.Number)
+                                {
+                                    liveStoppage = stopEl.GetInt64();
+                                }
+                            }
+                            var liveEnergy = root.TryGetProperty("totalEnergyKwh", out var energyEl) ? energyEl.GetDouble() : 0;
+                            var liveWastageBefore = root.TryGetProperty("wastageBeforeDie", out var wbEl) ? wbEl.GetDouble() : 0;
+                            var liveWastageAfter = root.TryGetProperty("wastageAfterDie", out var waEl) ? waEl.GetInt64() : 0;
+                            
+                            // İş değişimi kontrolü: JobCycleRecords'tan aktif işin siparis_no ve cycle_start_time'ını al
                             string? liveSiparisNo = null;
                             DateTime? liveCycleStartTime = null;
                             
-                            try
-                            {
-                                var jobQuery = @"SELECT TOP 1 siparis_no, cycle_start_time FROM JobCycleRecords WHERE status = 'active' ORDER BY cycle_start_time DESC";
-                                using var jobCmd = new SqlCommand(jobQuery, connection);
-                                using var jobReader = await jobCmd.ExecuteReaderAsync();
-                                if (await jobReader.ReadAsync())
-                                {
-                                    liveSiparisNo = jobReader["siparis_no"]?.ToString();
-                                    var cycleStartOrdinal = jobReader.GetOrdinal("cycle_start_time");
-                                    liveCycleStartTime = jobReader.IsDBNull(cycleStartOrdinal) ? null : jobReader.GetDateTime(cycleStartOrdinal);
-                                }
-                                jobReader.Close();
-                            }
-                            catch
-                            {
-                                // JobCycleRecords yoksa devam et
-                            }
+                            var activeJobQuery = @"
+                                SELECT TOP 1 siparis_no, cycle_start_time
+                                FROM JobCycleRecords
+                                WHERE status = 'active'
+                                ORDER BY cycle_start_time DESC";
                             
-                            // Yeni iş başladı mı kontrol et
+                            using var activeJobCmd = new SqlCommand(activeJobQuery, connection);
+                            using var activeJobReader = await activeJobCmd.ExecuteReaderAsync();
+                            if (await activeJobReader.ReadAsync())
+                            {
+                                liveSiparisNo = activeJobReader.IsDBNull(0) ? null : activeJobReader.GetString(0);
+                                liveCycleStartTime = activeJobReader.IsDBNull(1) ? null : activeJobReader.GetDateTime(1);
+                            }
+                            activeJobReader.Close();
+                            
+                            // İş değişimi kontrolü
                             bool isNewJob = false;
-                            if (!string.IsNullOrEmpty(snapshotSiparisNo) && !string.IsNullOrEmpty(liveSiparisNo))
+                            if (!string.IsNullOrEmpty(liveSiparisNo) && !string.IsNullOrEmpty(snapshotStartSiparisNo))
                             {
-                                // Siparis_no farklıysa yeni iş başlamış
-                                isNewJob = snapshotSiparisNo != liveSiparisNo;
+                                // Siparis no değiştiyse yeni iş
+                                isNewJob = liveSiparisNo != snapshotStartSiparisNo;
+                                _logger.LogInformation($"İş değişimi kontrolü - Live SiparisNo: {liveSiparisNo}, Snapshot SiparisNo: {snapshotStartSiparisNo}, isNewJob: {isNewJob}");
                             }
-                            else if (snapshotCycleStartTime.HasValue && liveCycleStartTime.HasValue)
+                            else if (liveCycleStartTime.HasValue && snapshotStartCycleStartTime.HasValue)
                             {
-                                // cycle_start_time farklıysa yeni iş başlamış
-                                isNewJob = snapshotCycleStartTime.Value != liveCycleStartTime.Value;
+                                // Cycle start time değiştiyse yeni iş
+                                isNewJob = liveCycleStartTime.Value != snapshotStartCycleStartTime.Value;
+                                _logger.LogInformation($"İş değişimi kontrolü - Live CycleStart: {liveCycleStartTime}, Snapshot CycleStart: {snapshotStartCycleStartTime}, isNewJob: {isNewJob}");
+                            }
+                            else
+                            {
+                                _logger.LogWarning($"İş değişimi kontrolü - Eksik bilgi: Live SiparisNo: {liveSiparisNo}, Snapshot SiparisNo: {snapshotStartSiparisNo}, Live CycleStart: {liveCycleStartTime}, Snapshot CycleStart: {snapshotStartCycleStartTime}");
                             }
                             
-                            // Canlı veriden snapshot'a kadar olan farkı hesapla
-                            if (liveData.TryGetProperty("actualProduction", out var liveProd) && liveProd.ValueKind == JsonValueKind.Number)
+                            if (isNewJob)
                             {
-                                var currentProduction = liveProd.GetDecimal();
+                                // Yeni iş başladı: Üretim ve fire sıfırlanmış, direkt canlı verileri al
+                                totalProduction = liveProduction;
+                                totalWastageBefore = (decimal)liveWastageBefore;
+                                totalWastageAfter = liveWastageAfter;
                                 
-                                // Eğer yeni iş başladıysa, snapshot'tan çıkarma yapma (yeni işin üretimi direkt kullanılır)
-                                if (isNewJob)
+                                // Duruş ve enerji kontrolü: Yeni iş başladığında sıfırlanmış olabilir
+                                // Eğer canlı değer snapshot'tan küçük veya çok yakınsa, sıfırlanmış demektir
+                                var stoppageDiff = (decimal)liveStoppage - (snapshotStartStoppage ?? 0);
+                                var energyDiff = (decimal)liveEnergy - (snapshotStartEnergy ?? 0);
+                                
+                                // Duruş: Eğer negatif veya çok küçük fark varsa, yeni iş başladığında sıfırlanmış
+                                if (stoppageDiff < 0 || stoppageDiff < 60000) // 1 dakikadan az fark
                                 {
-                                    liveProduction = Math.Max(0, currentProduction);
+                                    totalStoppage = (decimal)liveStoppage; // Yeni işin duruşu
+                                    _logger.LogInformation($"Yeni iş başladı - Duruş sıfırlanmış: Live={liveStoppage} ms, Snapshot={snapshotStartStoppage} ms, Total={totalStoppage} ms");
                                 }
                                 else
                                 {
-                                    liveProduction = Math.Max(0, currentProduction - (snapshotProduction ?? 0));
+                                    totalStoppage = stoppageDiff; // Kümülatif, snapshot'tan çıkar
+                                    _logger.LogInformation($"Yeni iş başladı - Duruş kümülatif: Live={liveStoppage} ms, Snapshot={snapshotStartStoppage} ms, Diff={stoppageDiff} ms, Total={totalStoppage} ms");
+                                }
+                                
+                                // Enerji: Eğer negatif veya çok küçük fark varsa, yeni iş başladığında sıfırlanmış olabilir
+                                // Ama genelde enerji kümülatif olduğu için, sadece negatifse direkt al
+                                if (energyDiff < 0)
+                                {
+                                    totalEnergy = (decimal)liveEnergy; // Yeni işin enerjisi
+                                }
+                                else
+                                {
+                                    totalEnergy = energyDiff; // Kümülatif, snapshot'tan çıkar
                                 }
                             }
-                            
-                            if (liveData.TryGetProperty("totalStoppageDuration", out var liveStop) && liveStop.ValueKind == JsonValueKind.Number)
+                            else
                             {
-                                var currentStoppage = liveStop.GetInt64();
-                                // Yeni iş başladıysa snapshot'tan çıkarma
-                                liveStoppage = isNewJob ? Math.Max(0, currentStoppage) : Math.Max(0, currentStoppage - (snapshotStoppage ?? 0));
+                                // Aynı iş devam ediyor: Snapshot'tan çıkar
+                                totalProduction = Math.Max(0, (decimal)liveProduction - (snapshotStartProduction ?? 0));
+                                totalStoppage = Math.Max(0, (decimal)liveStoppage - (snapshotStartStoppage ?? 0));
+                                totalEnergy = Math.Max(0, (decimal)liveEnergy - (snapshotStartEnergy ?? 0));
+                                totalWastageBefore = Math.Max(0, (decimal)liveWastageBefore - (snapshotStartWastageBefore ?? 0));
+                                totalWastageAfter = Math.Max(0, (decimal)liveWastageAfter - (snapshotStartWastageAfter ?? 0));
                             }
                             
-                            // Enerji kümülatif olduğu için canlı veriden snapshot'ı çıkar
-                            decimal? currentEnergy = null;
-                            if (liveData.TryGetProperty("totalEnergyKwh", out var liveEngTotal) && liveEngTotal.ValueKind == JsonValueKind.Number)
-                            {
-                                currentEnergy = liveEngTotal.GetDecimal();
-                            }
-                            else if (liveData.TryGetProperty("energyConsumptionKwh", out var liveEng) && liveEng.ValueKind == JsonValueKind.Number)
-                            {
-                                currentEnergy = liveEng.GetDecimal();
-                            }
-                            
-                            if (currentEnergy.HasValue)
-                            {
-                                // Enerji her zaman kümülatif, snapshot'tan çıkar
-                                liveEnergy = Math.Max(0, currentEnergy.Value - (snapshotEnergy ?? 0));
-                            }
-                            
-                            if (liveData.TryGetProperty("wastageBeforeDie", out var liveWastBefore) && liveWastBefore.ValueKind == JsonValueKind.Number)
-                            {
-                                var currentWastBefore = liveWastBefore.GetDecimal();
-                                liveWastageBefore = isNewJob ? Math.Max(0, currentWastBefore) : Math.Max(0, currentWastBefore - (snapshotWastageBefore ?? 0));
-                            }
-                            
-                            if (liveData.TryGetProperty("wastageAfterDie", out var liveWastAfter) && liveWastAfter.ValueKind == JsonValueKind.Number)
-                            {
-                                var currentWastAfter = liveWastAfter.GetDecimal();
-                                liveWastageAfter = isNewJob ? Math.Max(0, currentWastAfter) : Math.Max(0, currentWastAfter - (snapshotWastageAfter ?? 0));
-                            }
-                            
-                            // OEE değerlerini al
-                            if (liveData.TryGetProperty("overallOEE", out var liveOEE) && liveOEE.ValueKind == JsonValueKind.Number)
-                            {
-                                liveOverallOEE = liveOEE.GetDouble();
-                            }
-                            if (liveData.TryGetProperty("availability", out var liveAvail) && liveAvail.ValueKind == JsonValueKind.Number)
-                            {
-                                liveAvailability = liveAvail.GetDouble();
-                            }
-                            if (liveData.TryGetProperty("performance", out var livePerf) && livePerf.ValueKind == JsonValueKind.Number)
-                            {
-                                livePerformance = livePerf.GetDouble();
-                            }
-                            if (liveData.TryGetProperty("quality", out var liveQual) && liveQual.ValueKind == JsonValueKind.Number)
-                            {
-                                liveQuality = liveQual.GetDouble();
-                            }
+                            totalPaper = 0;
+                            totalEthylAlcohol = 0;
+                            totalEthylAcetate = 0;
+                            liveDataFetched = true;
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Canlı veri çekilirken hata oluştu, devam eden işler için veri eklenmeyecek");
+                        _logger.LogWarning(ex, "Bugün için canlı veri alınamadı, fallback kullanılıyor");
                     }
                 }
-
-                // Toplam hesaplama
-                // Mantık:
-                // 1. completedProduction: Dönem başından ÖNCE başlayıp dönem içinde BİTEN işlerin TOPLAM üretimi
-                //    Bu işlerin snapshot'taki değerini çıkarmalıyız (çünkü snapshot dönem başındaki kümülatif değer)
-                // 2. fullPeriodProduction: Dönem içinde başlayıp biten işler, snapshot'tan çıkarma yapmayız
-                // 3. liveProduction: Devam eden iş için (canlı - snapshot) zaten hesaplanmış
                 
-                // ÖNEMLİ: Eğer completedJobCount = 0 ise, snapshot'tan çıkarma yapmamalıyız!
-                // Çünkü snapshot sadece devam eden işin başlangıç değerini içerir
-                var totalJobCount = completedJobCount + fullPeriodJobCount + (liveProduction.HasValue && liveProduction.Value > 0 ? 1 : 0);
-                
-                decimal totalProduction;
-                if (completedJobCount > 0)
+                if (!liveDataFetched)
                 {
-                    // Dönem içinde biten iş var: Toplam üretimden snapshot'taki üretimi çıkar
-                    totalProduction = (completedProduction ?? 0) - (snapshotProduction ?? 0) + (fullPeriodProduction ?? 0) + (liveProduction ?? 0);
-                }
-                else
-                {
-                    // Dönem içinde biten iş yok: Sadece devam eden iş varsa liveProduction'ı kullan
-                    totalProduction = (fullPeriodProduction ?? 0) + (liveProduction ?? 0);
-                }
-                decimal totalStoppage;
-                if (completedJobCount > 0)
-                {
-                    totalStoppage = (completedStoppage ?? 0) - (snapshotStoppage ?? 0) + (fullPeriodStoppage ?? 0) + (liveStoppage ?? 0);
-                }
-                else
-                {
-                    totalStoppage = (fullPeriodStoppage ?? 0) + (liveStoppage ?? 0);
-                }
-                
-                // Enerji: JobEndReports'taki işlerin enerjisi + (Canlı enerji - Snapshot enerji)
-                var totalEnergy = (completedEnergy ?? 0) + (fullPeriodEnergy ?? 0) + (liveEnergy ?? 0);
-                
-                // Fire (Wastage) hesaplama
-                decimal totalWastageBefore;
-                decimal totalWastageAfter;
-                if (completedJobCount > 0)
-                {
-                    totalWastageBefore = (completedWastageBefore ?? 0) - (snapshotWastageBefore ?? 0) + (fullPeriodWastageBefore ?? 0) + (liveWastageBefore ?? 0);
-                    totalWastageAfter = (completedWastageAfter ?? 0) - (snapshotWastageAfter ?? 0) + (fullPeriodWastageAfter ?? 0) + (liveWastageAfter ?? 0);
-                }
-                else
-                {
-                    totalWastageBefore = (fullPeriodWastageBefore ?? 0) + (liveWastageBefore ?? 0);
-                    totalWastageAfter = (fullPeriodWastageAfter ?? 0) + (liveWastageAfter ?? 0);
+                    if (snapshotEndProduction.HasValue && snapshotStartProduction.HasValue)
+                    {
+                        // Snapshot bazlı hesaplama (en doğru yöntem - geçmiş günler için)
+                        totalProduction = Math.Max(0, snapshotEndProduction.Value - snapshotStartProduction.Value);
+                        totalStoppage = Math.Max(0, (snapshotEndStoppage ?? 0) - (snapshotStartStoppage ?? 0));
+                        totalEnergy = Math.Max(0, (snapshotEndEnergy ?? 0) - (snapshotStartEnergy ?? 0));
+                        totalWastageBefore = Math.Max(0, (snapshotEndWastageBefore ?? 0) - (snapshotStartWastageBefore ?? 0));
+                        totalWastageAfter = Math.Max(0, (snapshotEndWastageAfter ?? 0) - (snapshotStartWastageAfter ?? 0));
+                        totalPaper = Math.Max(0, 0); // Paper snapshot'ta yok, JobEndReports'tan alınabilir
+                        totalEthylAlcohol = Math.Max(0, 0); // EthylAlcohol snapshot'ta yok
+                        totalEthylAcetate = Math.Max(0, 0); // EthylAcetate snapshot'ta yok
+                    }
+                    else
+                    {
+                        // Fallback: JobEndReports'tan hesapla (eski yöntem)
+                        if (completedJobCount > 0)
+                        {
+                            totalProduction = (completedProduction ?? 0) - (snapshotStartProduction ?? 0) + (fullPeriodProduction ?? 0);
+                            totalStoppage = (completedStoppage ?? 0) - (snapshotStartStoppage ?? 0) + (fullPeriodStoppage ?? 0);
+                            totalEnergy = (completedEnergy ?? 0) + (fullPeriodEnergy ?? 0);
+                            totalWastageBefore = (completedWastageBefore ?? 0) - (snapshotStartWastageBefore ?? 0) + (fullPeriodWastageBefore ?? 0);
+                            totalWastageAfter = (completedWastageAfter ?? 0) - (snapshotStartWastageAfter ?? 0) + (fullPeriodWastageAfter ?? 0);
+                            totalPaper = (completedPaper ?? 0) - (snapshotStartPaper ?? 0) + (fullPeriodPaper ?? 0);
+                            totalEthylAlcohol = (completedEthylAlcohol ?? 0) - (snapshotStartEthylAlcohol ?? 0) + (fullPeriodEthylAlcohol ?? 0);
+                            totalEthylAcetate = (completedEthylAcetate ?? 0) - (snapshotStartEthylAcetate ?? 0) + (fullPeriodEthylAcetate ?? 0);
+                        }
+                        else
+                        {
+                            totalProduction = (fullPeriodProduction ?? 0);
+                            totalStoppage = (fullPeriodStoppage ?? 0);
+                            totalEnergy = (fullPeriodEnergy ?? 0);
+                            totalWastageBefore = (fullPeriodWastageBefore ?? 0);
+                            totalWastageAfter = (fullPeriodWastageAfter ?? 0);
+                            totalPaper = (fullPeriodPaper ?? 0);
+                            totalEthylAlcohol = (fullPeriodEthylAlcohol ?? 0);
+                            totalEthylAcetate = (fullPeriodEthylAcetate ?? 0);
+                        }
+                    }
                 }
                 
-                decimal totalPaper;
-                decimal totalEthylAlcohol;
-                decimal totalEthylAcetate;
-                if (completedJobCount > 0)
-                {
-                    totalPaper = (completedPaper ?? 0) - (snapshotPaper ?? 0) + (fullPeriodPaper ?? 0);
-                    totalEthylAlcohol = (completedEthylAlcohol ?? 0) - (snapshotEthylAlcohol ?? 0) + (fullPeriodEthylAlcohol ?? 0);
-                    totalEthylAcetate = (completedEthylAcetate ?? 0) - (snapshotEthylAcetate ?? 0) + (fullPeriodEthylAcetate ?? 0);
-                }
-                else
-                {
-                    totalPaper = (fullPeriodPaper ?? 0);
-                    totalEthylAlcohol = (fullPeriodEthylAlcohol ?? 0);
-                    totalEthylAcetate = (fullPeriodEthylAcetate ?? 0);
-                }
+                // İş sayısı
+                var totalJobCount = completedJobCount + fullPeriodJobCount;
 
                 // Negatif değerleri sıfırla
                 totalProduction = Math.Max(0, totalProduction);
@@ -1497,30 +1754,58 @@ namespace DashboardBackend.Controllers
                 totalWastageBefore = Math.Max(0, totalWastageBefore);
                 totalWastageAfter = Math.Max(0, totalWastageAfter);
 
-                // Periyodik OEE hesaplama - Her iş için ayrı ayrı hesaplayıp ortalamasını al
+                // Periyodik OEE hesaplama - Snapshot bazlı, her iş için ayrı ayrı hesaplayıp ortalamasını al
                 double? calculatedAvailability = null;
                 double? calculatedPerformance = null;
                 double? calculatedQuality = null;
                 double? calculatedOverallOEE = null;
 
-                // Tüm işleri al (dönem içinde biten + dönem içinde başlayıp biten)
+                // OEE debug bilgileri (frontend doğrulama için)
+                var oeeJobDetails = new List<object>();
+
+                // Helper: full_live_data JSON'undan remaining_work parse et
+                decimal? ParseRemainingWorkFromJson(string? jsonString)
+                {
+                    if (string.IsNullOrEmpty(jsonString)) return null;
+                    try
+                    {
+                        var jsonDoc = System.Text.Json.JsonDocument.Parse(jsonString);
+                        if (jsonDoc.RootElement.TryGetProperty("remainingWork", out var remainingWork))
+                        {
+                            if (remainingWork.ValueKind == System.Text.Json.JsonValueKind.Number)
+                            {
+                                return remainingWork.GetDecimal();
+                            }
+                        }
+                    }
+                    catch { }
+                    return null;
+                }
+
+                // Periyot içinde çalışan işleri bul (3 kategori)
+                // 1. Periyot başından önce başlayıp periyot içinde biten
+                // 2. Periyot içinde başlayıp biten
+                // 3. Periyot içinde başlayıp devam eden (periyot sonu snapshot'ından hesaplanacak)
+                // JobEndReports'tan bitmiş işleri al
                 var allJobsQuery = @"
                     SELECT 
                         id,
-                        toplam_miktar,
-                        kalan_miktar,
+                        siparis_no,
+                        COALESCE(TRY_CAST(REPLACE(CAST(COALESCE(toplam_miktar, '0') AS NVARCHAR(MAX)), ',', '.') AS DECIMAL(18,2)), 0) AS toplam_miktar,
+                        COALESCE(TRY_CAST(REPLACE(CAST(COALESCE(kalan_miktar, '0') AS NVARCHAR(MAX)), ',', '.') AS DECIMAL(18,2)), 0) AS kalan_miktar,
                         set_sayisi,
-                        silindir_cevresi,
+                        COALESCE(TRY_CAST(REPLACE(COALESCE(silindir_cevresi, '0'), ',', '.') AS DECIMAL(18,2)), 0) AS silindir_cevresi,
                         hedef_hiz,
                         actual_production,
-                        wastage_before_die,
-                        wastage_after_die,
-                        total_stoppage_duration,
+                        COALESCE(TRY_CAST(REPLACE(CAST(COALESCE(wastage_before_die, '0') AS NVARCHAR(MAX)), ',', '.') AS DECIMAL(18,2)), 0) AS wastage_before_die,
+                        COALESCE(TRY_CAST(REPLACE(CAST(COALESCE(wastage_after_die, '0') AS NVARCHAR(MAX)), ',', '.') AS DECIMAL(18,2)), 0) AS wastage_after_die,
+                        COALESCE(TRY_CAST(REPLACE(CAST(COALESCE(wastage_after_quality_control, '0') AS NVARCHAR(MAX)), ',', '.') AS DECIMAL(18,2)), 0) AS wastage_after_quality_control,
+                        COALESCE(TRY_CAST(REPLACE(CAST(COALESCE(total_stoppage_duration, '0') AS NVARCHAR(MAX)), ',', '.') AS DECIMAL(18,2)), 0) AS total_stoppage_duration,
                         job_start_time,
                         job_end_time
                     FROM JobEndReports
-                    WHERE (job_end_time >= @periodStart AND job_end_time <= @periodEnd AND job_start_time < @periodStart)
-                       OR (job_start_time >= @periodStart AND job_end_time <= @periodEnd)";
+                    WHERE (job_start_time < @periodEnd AND job_end_time > @periodStart) -- Periyot ile kesişen tüm işler
+                    ORDER BY job_start_time";
 
                 using var allJobsCmd = new SqlCommand(allJobsQuery, connection);
                 allJobsCmd.Parameters.AddWithValue("@periodStart", periodStart);
@@ -1529,133 +1814,304 @@ namespace DashboardBackend.Controllers
                 var oeeValues = new List<(double availability, double performance, double quality, double overall)>();
                 
                 using var allJobsReader = await allJobsCmd.ExecuteReaderAsync();
+                int foundJobCount = 0;
                 while (await allJobsReader.ReadAsync())
                 {
+                    foundJobCount++;
                     try
                     {
-                        // Her iş için OEE hesapla - GetOEECalculation mantığı
-                        // Güvenli parse işlemleri (NVARCHAR değerler için)
-                        decimal kalanMiktar = 0;
-                        if (decimal.TryParse(allJobsReader["kalan_miktar"]?.ToString()?.Replace(",", "."), 
-                            System.Globalization.NumberStyles.Any, 
-                            System.Globalization.CultureInfo.InvariantCulture, 
-                            out var kalanMiktarParsed))
-                        {
-                            kalanMiktar = kalanMiktarParsed;
-                        }
-                        
-                        int setSayisi = 0;
-                        if (int.TryParse(allJobsReader["set_sayisi"]?.ToString(), out var setSayisiParsed))
-                        {
-                            setSayisi = setSayisiParsed;
-                        }
-                        
-                        decimal silindirCevresi = 0;
-                        if (decimal.TryParse(allJobsReader["silindir_cevresi"]?.ToString()?.Replace(",", "."), 
-                            System.Globalization.NumberStyles.Any, 
-                            System.Globalization.CultureInfo.InvariantCulture, 
-                            out var silindirCevresiParsed))
-                        {
-                            silindirCevresi = silindirCevresiParsed;
-                        }
-                        
-                        int hedefHiz = 0;
-                        if (int.TryParse(allJobsReader["hedef_hiz"]?.ToString(), out var hedefHizParsed))
-                        {
-                            hedefHiz = hedefHizParsed;
-                        }
-                        
-                        int actualProd = 0;
-                        if (int.TryParse(allJobsReader["actual_production"]?.ToString(), out var actualProdParsed))
-                        {
-                            actualProd = actualProdParsed;
-                        }
-                        
-                        decimal wastageBefore = 0;
-                        if (decimal.TryParse(allJobsReader["wastage_before_die"]?.ToString()?.Replace(",", "."), 
-                            System.Globalization.NumberStyles.Any, 
-                            System.Globalization.CultureInfo.InvariantCulture, 
-                            out var wastageBeforeParsed))
-                        {
-                            wastageBefore = wastageBeforeParsed;
-                        }
-                        
-                        decimal wastageAfter = 0;
-                        if (decimal.TryParse(allJobsReader["wastage_after_die"]?.ToString()?.Replace(",", "."), 
-                            System.Globalization.NumberStyles.Any, 
-                            System.Globalization.CultureInfo.InvariantCulture, 
-                            out var wastageAfterParsed))
-                        {
-                            wastageAfter = wastageAfterParsed;
-                        }
-                        
-                        decimal jobTotalStoppage = 0;
-                        if (decimal.TryParse(allJobsReader["total_stoppage_duration"]?.ToString()?.Replace(",", "."), 
-                            System.Globalization.NumberStyles.Any, 
-                            System.Globalization.CultureInfo.InvariantCulture, 
-                            out var jobTotalStoppageParsed))
-                        {
-                            jobTotalStoppage = jobTotalStoppageParsed;
-                        }
+                        // Temel iş bilgileri
+                        int jobId = allJobsReader["id"] != DBNull.Value ? Convert.ToInt32(allJobsReader["id"]) : 0;
+                        string? jobSiparisNo = allJobsReader["siparis_no"]?.ToString();
+                        // İş parametrelerini parse et (SQL'de CAST edildiği için direkt okunabilir)
+                        int setSayisi = allJobsReader["set_sayisi"] != DBNull.Value ? Convert.ToInt32(allJobsReader["set_sayisi"]) : 0;
+                        decimal silindirCevresi = allJobsReader["silindir_cevresi"] != DBNull.Value ? Convert.ToDecimal(allJobsReader["silindir_cevresi"]) : 0;
+                        int hedefHiz = allJobsReader["hedef_hiz"] != DBNull.Value ? Convert.ToInt32(allJobsReader["hedef_hiz"]) : 0;
                         
                         if (!DateTime.TryParse(allJobsReader["job_start_time"]?.ToString(), out var jobStartTime) ||
                             !DateTime.TryParse(allJobsReader["job_end_time"]?.ToString(), out var jobEndTime))
-                        {
-                            continue; // Tarih parse edilemezse bu işi atla
-                        }
+                            continue;
+
+                        // İşin periyot içindeki kısmını belirle
+                        bool isJobStartedBeforePeriod = jobStartTime < periodStart;
+                        bool isJobEndedInPeriod = jobEndTime <= periodEnd;
                         
+                        // Periyot içindeki değerleri hesapla (snapshot farklarından)
+                        decimal periodProduction = 0;
+                        decimal periodStoppage = 0;
+                        decimal periodWastageBefore = 0;
+                        decimal periodWastageAfter = 0;
+                        decimal periodWastageAfterQualityControl = 0;
+                        decimal periodRemainingWork = 0;
+
+                        if (isJobStartedBeforePeriod && isJobEndedInPeriod)
+                        {
+                            // 1. iş: Periyot başından önce başlamış, periyot içinde bitmiş
+                            // JobEndReports'taki değerler - Snapshot başındaki değerler
+                            int jobActualProd = 0;
+                            if (int.TryParse(allJobsReader["actual_production"]?.ToString(), out var actualProdParsed))
+                                jobActualProd = actualProdParsed;
+                            
+                            decimal jobStoppage = 0;
+                            if (decimal.TryParse(allJobsReader["total_stoppage_duration"]?.ToString()?.Replace(",", "."), 
+                                System.Globalization.NumberStyles.Any, 
+                                System.Globalization.CultureInfo.InvariantCulture, 
+                                out var jobStoppageParsed))
+                                jobStoppage = jobStoppageParsed;
+                            
+                            decimal jobWastageBefore = 0;
+                            if (decimal.TryParse(allJobsReader["wastage_before_die"]?.ToString()?.Replace(",", "."), 
+                                System.Globalization.NumberStyles.Any, 
+                                System.Globalization.CultureInfo.InvariantCulture, 
+                                out var jobWastageBeforeParsed))
+                                jobWastageBefore = jobWastageBeforeParsed;
+                            
+                            decimal jobWastageAfter = 0;
+                            if (decimal.TryParse(allJobsReader["wastage_after_die"]?.ToString()?.Replace(",", "."), 
+                                System.Globalization.NumberStyles.Any, 
+                                System.Globalization.CultureInfo.InvariantCulture, 
+                                out var jobWastageAfterParsed))
+                                jobWastageAfter = jobWastageAfterParsed;
+
+                            periodProduction = Math.Max(0, jobActualProd - (snapshotStartProduction ?? 0));
+                            periodStoppage = Math.Max(0, jobStoppage - (snapshotStartStoppage ?? 0));
+                            periodWastageBefore = Math.Max(0, jobWastageBefore - (snapshotStartWastageBefore ?? 0));
+                            periodWastageAfter = Math.Max(0, jobWastageAfter - (snapshotStartWastageAfter ?? 0));
+                            
+                            // wastage_after_quality_control iş bitince girilen bir değer, iş bitmişse tüm değeri kullan
+                            decimal jobWastageAfterQualityControl = 0;
+                            if (decimal.TryParse(allJobsReader["wastage_after_quality_control"]?.ToString()?.Replace(",", "."), 
+                                System.Globalization.NumberStyles.Any, 
+                                System.Globalization.CultureInfo.InvariantCulture, 
+                                out var jobWastageAfterQualityControlParsed))
+                                jobWastageAfterQualityControl = jobWastageAfterQualityControlParsed;
+                            periodWastageAfterQualityControl = jobWastageAfterQualityControl;
+                            
+                            // Kalan miktar: Snapshot başındaki remaining_work (JSON'dan)
+                            periodRemainingWork = ParseRemainingWorkFromJson(snapshotStartFullLiveData) ?? 0;
+                        }
+                        else if (!isJobStartedBeforePeriod && isJobEndedInPeriod)
+                        {
+                            // 2. iş: Periyot içinde başlayıp bitmiş
+                            // JobEndReports'tan direkt al
+                            int jobActualProd = 0;
+                            if (int.TryParse(allJobsReader["actual_production"]?.ToString(), out var actualProdParsed))
+                                jobActualProd = actualProdParsed;
+                            
+                            decimal jobStoppage = 0;
+                            if (decimal.TryParse(allJobsReader["total_stoppage_duration"]?.ToString()?.Replace(",", "."), 
+                                System.Globalization.NumberStyles.Any, 
+                                System.Globalization.CultureInfo.InvariantCulture, 
+                                out var jobStoppageParsed))
+                                jobStoppage = jobStoppageParsed;
+                            
+                            decimal jobWastageBefore = 0;
+                            if (decimal.TryParse(allJobsReader["wastage_before_die"]?.ToString()?.Replace(",", "."), 
+                                System.Globalization.NumberStyles.Any, 
+                                System.Globalization.CultureInfo.InvariantCulture, 
+                                out var jobWastageBeforeParsed))
+                                jobWastageBefore = jobWastageBeforeParsed;
+                            
+                            decimal jobWastageAfter = 0;
+                            if (decimal.TryParse(allJobsReader["wastage_after_die"]?.ToString()?.Replace(",", "."), 
+                                System.Globalization.NumberStyles.Any, 
+                                System.Globalization.CultureInfo.InvariantCulture, 
+                                out var jobWastageAfterParsed))
+                                jobWastageAfter = jobWastageAfterParsed;
+                            
+                            decimal jobKalanMiktar = 0;
+                            if (decimal.TryParse(allJobsReader["kalan_miktar"]?.ToString()?.Replace(",", "."), 
+                                System.Globalization.NumberStyles.Any, 
+                                System.Globalization.CultureInfo.InvariantCulture, 
+                                out var jobKalanMiktarParsed))
+                                jobKalanMiktar = jobKalanMiktarParsed;
+
+                            periodProduction = jobActualProd;
+                            periodStoppage = jobStoppage;
+                            periodWastageBefore = jobWastageBefore;
+                            periodWastageAfter = jobWastageAfter;
+                            
+                            // wastage_after_quality_control iş bitince girilen bir değer, iş bitmişse tüm değeri kullan
+                            decimal jobWastageAfterQualityControl = 0;
+                            if (decimal.TryParse(allJobsReader["wastage_after_quality_control"]?.ToString()?.Replace(",", "."), 
+                                System.Globalization.NumberStyles.Any, 
+                                System.Globalization.CultureInfo.InvariantCulture, 
+                                out var jobWastageAfterQualityControlParsed))
+                                jobWastageAfterQualityControl = jobWastageAfterQualityControlParsed;
+                            periodWastageAfterQualityControl = jobWastageAfterQualityControl;
+                            
+                            periodRemainingWork = jobKalanMiktar;
+                        }
+                        else
+                        {
+                            // 3. iş: Periyot içinde başlamış, periyot sonundan sonra bitmiş
+                            // Snapshot sonu - Snapshot başı = periyot içindeki değerler
+                            periodProduction = Math.Max(0, (snapshotEndProduction ?? 0) - (snapshotStartProduction ?? 0));
+                            periodStoppage = Math.Max(0, (snapshotEndStoppage ?? 0) - (snapshotStartStoppage ?? 0));
+                            periodWastageBefore = Math.Max(0, (snapshotEndWastageBefore ?? 0) - (snapshotStartWastageBefore ?? 0));
+                            periodWastageAfter = Math.Max(0, (snapshotEndWastageAfter ?? 0) - (snapshotStartWastageAfter ?? 0));
+                            
+                            // Kalan miktar: Snapshot başındaki remaining_work (JSON'dan)
+                            periodRemainingWork = ParseRemainingWorkFromJson(snapshotStartFullLiveData) ?? 0;
+                        }
+
+                        // İş parametreleri
                         decimal toplamMiktar = 0;
                         if (decimal.TryParse(allJobsReader["toplam_miktar"]?.ToString()?.Replace(",", "."), 
                             System.Globalization.NumberStyles.Any, 
                             System.Globalization.CultureInfo.InvariantCulture, 
                             out var toplamMiktarParsed))
-                        {
                             toplamMiktar = toplamMiktarParsed;
-                        }
+                        
+                        decimal kalanMiktar = 0;
+                        if (decimal.TryParse(allJobsReader["kalan_miktar"]?.ToString()?.Replace(",", "."), 
+                            System.Globalization.NumberStyles.Any, 
+                            System.Globalization.CultureInfo.InvariantCulture, 
+                            out var kalanMiktarParsed))
+                            kalanMiktar = kalanMiktarParsed;
 
-                        // Planlanan Süre
-                        var hesaplanacakMiktar = (kalanMiktar <= 0) ? toplamMiktar : kalanMiktar;
-                        var adim1 = hesaplanacakMiktar / setSayisi;
-                        var adim2 = silindirCevresi / 1000; // mm -> m
-                        var adim3 = adim2 / hedefHiz;
-                        var planlananSure = adim1 * adim3;
-
-                        // Gerçek Çalışma Süresi
-                        var gercekCalismaSuresi = (decimal)(jobEndTime - jobStartTime).TotalMinutes;
-
-                        // Duruş Süresi
-                        var durusSuresiDakika = (jobTotalStoppage / 1000) / 60; // ms -> dakika
-                        if (durusSuresiDakika > gercekCalismaSuresi * 0.8m)
+                        // OEE Hesaplama (verdiğin formüllerle)
+                        // Parametre kontrolü - 0 değerlerini kontrol et
+                        if (setSayisi <= 0 || silindirCevresi <= 0 || hedefHiz <= 0)
                         {
-                            durusSuresiDakika = gercekCalismaSuresi * 0.8m;
+                            _logger.LogWarning($"İş OEE hesaplanırken geçersiz parametreler: setSayisi={setSayisi}, silindirCevresi={silindirCevresi}, hedefHiz={hedefHiz}, siparis_no={allJobsReader["siparis_no"]}");
+                            continue; // Bu işi atla
                         }
 
-                        // Hatalı Üretim
-                        var dieOncesiAdet = (wastageBefore * 1000 / silindirCevresi) * setSayisi;
-                        var hataliUretim = dieOncesiAdet + wastageAfter;
-                        var totalCount = (decimal)actualProd + hataliUretim;
+                        // 1. Availability = (Run Time / Planned Time) × 100
+                        //    Planned Time = Periyot içinde üretilen miktarı hedef hızla üretmek için gereken süre
+                        //    Run Time = Gerçek çalışma süresi (periyot süresi - duruş süresi)
+                        //    Planned Time = (periodProduction / set_sayisi) * (silindir_cevresi / 1000) / hedef_hiz
+                        if (periodProduction <= 0)
+                        {
+                            _logger.LogWarning($"İş OEE hesaplanırken periodProduction <= 0: {periodProduction}, siparis_no={allJobsReader["siparis_no"]}");
+                            continue; // Bu işi atla
+                        }
+                        var adim1 = periodProduction / setSayisi;
+                        var adim2 = silindirCevresi / 1000m; // mm -> m
+                        var adim3 = adim2 / hedefHiz;
+                        var planlananSure = adim1 * adim3; // dakika (periyot içinde üretilen miktarı hedef hızla üretmek için gereken süre)
 
-                        // OEE Bileşenleri
-                        var runTimeForAvailability = planlananSure - durusSuresiDakika;
+                        // Gerçek çalışma süresi = Periyot süresi - Duruş süresi
+                        var periyotSuresiDakika = (decimal)(periodEnd - periodStart).TotalMinutes;
+                        var durusSuresiDakika = (periodStoppage / 1000m) / 60m; // ms -> dakika
+                        var runTimeForAvailability = periyotSuresiDakika - durusSuresiDakika;
                         if (runTimeForAvailability < 0) runTimeForAvailability = 0;
                         var availability = planlananSure > 0 ? (double)((runTimeForAvailability / planlananSure) * 100) : 0;
                         availability = Math.Max(0, Math.Min(100, availability));
 
-                        var runTimeForPerformance = gercekCalismaSuresi - durusSuresiDakika;
-                        if (runTimeForPerformance < 0) runTimeForPerformance = 0;
-                        var idealCycleTime = (silindirCevresi / 1000) / (hedefHiz * setSayisi);
-                        var performance = runTimeForPerformance > 0 ? (double)((idealCycleTime * totalCount) / runTimeForPerformance * 100) : 0;
-                        performance = Math.Max(0, Math.Min(100, performance));
+                        // 2. Performance = (Average Speed / Target Speed) × 100
+                        //    average_speed: dataRecords'tan hesaplanır (MachineSpeed >= 65)
+                        //    hedefHiz: Target speed (m/dk)
+                        // İşin periyot içindeki zaman aralığını belirle
+                        var periodStartForJob = isJobStartedBeforePeriod ? periodStart : jobStartTime;
+                        var periodEndForJob = isJobEndedInPeriod ? jobEndTime : periodEnd;
+                        
+                        // dataRecords'tan average_speed hesapla (işin periyot içindeki kısmı için)
+                        decimal? jobAverageSpeed = null;
+                        try
+                        {
+                            var avgSpeedQuery = @"
+                                SELECT AVG(CAST(MachineSpeed AS FLOAT)) AS average_speed
+                                FROM dataRecords
+                                WHERE KayitZamani >= @periodStartForJob 
+                                  AND KayitZamani <= @periodEndForJob
+                                  AND MachineSpeed >= 65";
+                            
+                            using var avgSpeedCmd = new SqlCommand(avgSpeedQuery, connection);
+                            avgSpeedCmd.Parameters.AddWithValue("@periodStartForJob", periodStartForJob);
+                            avgSpeedCmd.Parameters.AddWithValue("@periodEndForJob", periodEndForJob);
+                            
+                            using var avgSpeedReader = await avgSpeedCmd.ExecuteReaderAsync();
+                            if (await avgSpeedReader.ReadAsync())
+                            {
+                                if (!avgSpeedReader.IsDBNull(0))
+                                {
+                                    jobAverageSpeed = Convert.ToDecimal(avgSpeedReader.GetDouble(0));
+                                }
+                            }
+                            avgSpeedReader.Close();
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, $"İş için average_speed hesaplanırken hata: {jobSiparisNo}");
+                        }
+                        
+                        // Performance = (Average Speed / Target Speed) × 100
+                        var performance = (jobAverageSpeed.HasValue && jobAverageSpeed.Value > 0 && hedefHiz > 0) 
+                            ? (double)((jobAverageSpeed.Value / hedefHiz) * 100) 
+                            : 0;
+                        performance = Math.Max(0, Math.Min(100, performance)); // %100'ü geçemez
 
-                        var totalCountForQuality = (decimal)actualProd + hataliUretim;
-                        var goodCount = (decimal)actualProd;
+                        // 3. Quality = (Good Count / Total Count) × 100
+                        //    Good Count = actual_production - wastage_after_quality_control
+                        //    Total Count = actual_production + wastage_before_die + wastage_after_die
+                        var dieOncesiAdet = silindirCevresi > 0 ? (periodWastageBefore * 1000m / silindirCevresi) * setSayisi : 0;
+                        var hataliUretim = dieOncesiAdet + periodWastageAfter;
+                        var goodCount = (decimal)periodProduction - periodWastageAfterQualityControl;
+                        if (goodCount < 0) goodCount = 0; // Negatif olamaz
+                        var totalCountForQuality = (decimal)periodProduction + hataliUretim;
                         var quality = totalCountForQuality > 0 ? (double)((goodCount / totalCountForQuality) * 100) : 0;
                         quality = Math.Max(0, Math.Min(100, quality));
 
+                        // 4. Overall OEE = (Availability × Performance × Quality) / 10000
                         var oee = (availability * performance * quality) / 10000.0;
                         oee = Math.Max(0, Math.Min(100, oee));
 
                         oeeValues.Add((availability, performance, quality, oee));
+
+                        // Debug için iş bazlı detay ekle
+                        oeeJobDetails.Add(new
+                        {
+                            jobId,
+                            siparisNo = jobSiparisNo,
+                            jobStartTime,
+                            jobEndTime,
+                            setSayisi,
+                            silindirCevresi,
+                            hedefHiz,
+                            toplamMiktar,
+                            periodProduction,
+                            periodWastageBefore,
+                            periodWastageAfter,
+                            periodStoppage,
+                            periodRemainingWork,
+                            periodWastageAfterQualityControl,
+                            // Performance için
+                            averageSpeed = jobAverageSpeed.HasValue ? Math.Round(jobAverageSpeed.Value, 2) : (decimal?)null,
+                            periodStartForJob,
+                            periodEndForJob,
+                            // Formül ara değerleri
+                            plannedTimeMinutes = planlananSure,
+                            runTimeAvailabilityMinutes = runTimeForAvailability,
+                            durusSuresiDakika = durusSuresiDakika,
+                            dieOncesiAdet = Math.Round(dieOncesiAdet, 0),
+                            hataliUretim = Math.Round(hataliUretim, 0),
+                            goodCountUnits = goodCount,
+                            totalCountForQualityUnits = totalCountForQuality,
+                            // Veri kaynakları
+                            dataSource = new
+                            {
+                                remainingWorkSource = periodRemainingWork > 0 ? "PeriodicSnapshots.full_live_data (snapshotStart)" : "JobEndReports.toplam_miktar",
+                                productionSource = isJobStartedBeforePeriod ? "JobEndReports.actual_production - snapshotStart.actual_production" : 
+                                                   isJobEndedInPeriod ? "JobEndReports.actual_production" : 
+                                                   "snapshotEnd.actual_production - snapshotStart.actual_production",
+                                stoppageSource = isJobStartedBeforePeriod ? "JobEndReports.total_stoppage_duration - snapshotStart.total_stoppage_duration" :
+                                                isJobEndedInPeriod ? "JobEndReports.total_stoppage_duration" :
+                                                "snapshotEnd.total_stoppage_duration - snapshotStart.total_stoppage_duration",
+                                wastageSource = isJobStartedBeforePeriod ? "JobEndReports.wastage - snapshotStart.wastage" :
+                                              isJobEndedInPeriod ? "JobEndReports.wastage" :
+                                              "snapshotEnd.wastage - snapshotStart.wastage",
+                                averageSpeedSource = $"dataRecords (MachineSpeed >= 65, {periodStartForJob:yyyy-MM-dd HH:mm:ss} - {periodEndForJob:yyyy-MM-dd HH:mm:ss})",
+                                wastageAfterQualityControlSource = "JobEndReports.wastage_after_quality_control (iş bitince girilen)"
+                            },
+                            // Sonuçlar
+                            availability,
+                            performance,
+                            quality,
+                            oee,
+                            isActiveJob = false
+                        });
                     }
                     catch (Exception ex)
                     {
@@ -1663,27 +2119,343 @@ namespace DashboardBackend.Controllers
                     }
                 }
                 allJobsReader.Close();
+                _logger.LogInformation($"Periyot içinde toplam {foundJobCount} iş bulundu (JobEndReports'tan). Period: {period}, Start: {periodStart}, End: {periodEnd}");
 
-                // Devam eden iş varsa canlı veriden OEE değerlerini ekle
-                if (liveProduction.HasValue && liveProduction.Value > 0 && 
-                    liveOverallOEE.HasValue && liveAvailability.HasValue && 
-                    livePerformance.HasValue && liveQuality.HasValue)
+                // Periyot içinde başlayıp devam eden işler (SADECE GEÇMİŞ GÜNLER İÇİN)
+                // Bugün için OEE hesaplanmaz, sadece geçmiş günler için hesaplanır
+                // snapshotEnd yoksa bile, snapshotStart varsa ve aynı iş devam ediyorsa kontrol et
+                if (!isTodayPeriod && snapshotStartFullLiveData != null)
                 {
-                    oeeValues.Add((
-                        liveAvailability.Value,
-                        livePerformance.Value,
-                        liveQuality.Value,
-                        liveOverallOEE.Value
-                    ));
+                    try
+                    {
+                        // Geçmiş günler için: Devam eden iş kontrolü
+                        bool shouldCalculateActiveJob = false;
+                        
+                        if (snapshotEndFullLiveData != null)
+                        {
+                            // Snapshot sonu var: İş değişimi kontrolü yap
+                            bool isSameJob = snapshotStartSiparisNo == snapshotEndSiparisNo && 
+                                            snapshotStartCycleStartTime == snapshotEndCycleStartTime;
+                            
+                            shouldCalculateActiveJob = !isSameJob || (snapshotEndProduction.HasValue && snapshotStartProduction.HasValue && 
+                                snapshotEndProduction.Value > snapshotStartProduction.Value);
+                        }
+                        else
+                        {
+                            // Snapshot sonu yok: Ama snapshot başı varsa, aynı iş devam ediyor olabilir
+                            // JobCycleRecords'tan kontrol et
+                            shouldCalculateActiveJob = true; // Kontrol et, eğer aktif iş varsa hesapla
+                        }
+                        
+                        if (shouldCalculateActiveJob)
+                        {
+                            // Periyot içinde çalışan bir iş var (devam eden veya yeni başlayan)
+                            // JobCycleRecords'tan aktif işin siparis_no'sunu al, sonra JobEndReports'tan aynı siparis_no için en son biten işin parametrelerini al
+                            string? activeSiparisNo = null;
+                            var activeJobCycleQuery = @"
+                                SELECT TOP 1 siparis_no
+                                FROM JobCycleRecords
+                                WHERE status = 'active' AND cycle_start_time <= @periodEnd
+                                ORDER BY cycle_start_time DESC";
+                            
+                            using var activeJobCycleCmd = new SqlCommand(activeJobCycleQuery, connection);
+                            activeJobCycleCmd.Parameters.AddWithValue("@periodEnd", periodEnd);
+                            
+                            using var activeJobCycleReader = await activeJobCycleCmd.ExecuteReaderAsync();
+                            if (await activeJobCycleReader.ReadAsync())
+                            {
+                                activeSiparisNo = activeJobCycleReader["siparis_no"]?.ToString();
+                            }
+                            activeJobCycleReader.Close();
+                            
+                            // JobEndReports'tan aynı siparis_no için en son biten işin parametrelerini al
+                            // Eğer JobEndReports'ta yoksa, JobCycleRecords'tan job_info JSON'undan parse et
+                            decimal silindirCevresi = 0;
+                            decimal hedefHiz = 0;
+                            int setSayisi = 0;
+                            decimal toplamMiktar = 0;
+                            bool jobParamsFound = false;
+                            
+                            if (!string.IsNullOrEmpty(activeSiparisNo))
+                            {
+                                // Önce JobEndReports'tan dene
+                                var activeJobQuery = @"
+                                    SELECT TOP 1 
+                                        COALESCE(TRY_CAST(REPLACE(COALESCE(silindir_cevresi, '0'), ',', '.') AS DECIMAL(18,2)), 0) AS silindir_cevresi,
+                                        COALESCE(TRY_CAST(hedef_hiz AS DECIMAL(18,2)), 0) AS hedef_hiz,
+                                        COALESCE(TRY_CAST(set_sayisi AS INT), 0) AS set_sayisi,
+                                        COALESCE(TRY_CAST(REPLACE(CAST(COALESCE(toplam_miktar, '0') AS NVARCHAR(MAX)), ',', '.') AS DECIMAL(18,2)), 0) AS toplam_miktar
+                                    FROM JobEndReports
+                                    WHERE siparis_no = @siparisNo
+                                    ORDER BY job_end_time DESC";
+                                
+                                using var activeJobCmd = new SqlCommand(activeJobQuery, connection);
+                                activeJobCmd.Parameters.AddWithValue("@siparisNo", activeSiparisNo);
+                                
+                                using var activeJobReader = await activeJobCmd.ExecuteReaderAsync();
+                                if (await activeJobReader.ReadAsync())
+                                {
+                                    silindirCevresi = activeJobReader.GetDecimal(0);
+                                    hedefHiz = activeJobReader.GetDecimal(1);
+                                    setSayisi = activeJobReader.GetInt32(2);
+                                    toplamMiktar = activeJobReader.GetDecimal(3);
+                                    jobParamsFound = true;
+                                }
+                                activeJobReader.Close();
+                                
+                                // JobEndReports'ta yoksa, JobCycleRecords'tan job_info JSON'undan parse et
+                                if (!jobParamsFound)
+                                {
+                                    var jobCycleQuery = @"
+                                        SELECT TOP 1 job_info
+                                        FROM JobCycleRecords
+                                        WHERE siparis_no = @siparisNo AND job_info IS NOT NULL
+                                        ORDER BY cycle_start_time DESC";
+                                    
+                                    using var jobCycleCmd = new SqlCommand(jobCycleQuery, connection);
+                                    jobCycleCmd.Parameters.AddWithValue("@siparisNo", activeSiparisNo);
+                                    
+                                    using var jobCycleReader = await jobCycleCmd.ExecuteReaderAsync();
+                                    if (await jobCycleReader.ReadAsync())
+                                    {
+                                        var jobInfoJson = jobCycleReader["job_info"]?.ToString();
+                                        if (!string.IsNullOrEmpty(jobInfoJson))
+                                        {
+                                            try
+                                            {
+                                                var jsonDoc = System.Text.Json.JsonDocument.Parse(jobInfoJson);
+                                                var root = jsonDoc.RootElement;
+                                                
+                                                // job_info JSON'undan parametreleri parse et
+                                                if (root.TryGetProperty("silindir_cevresi", out var scEl))
+                                                {
+                                                    var scStr = scEl.GetString()?.Replace(",", ".");
+                                                    if (decimal.TryParse(scStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var sc))
+                                                        silindirCevresi = sc;
+                                                }
+                                                if (root.TryGetProperty("hedef_hiz", out var hhEl))
+                                                {
+                                                    if (hhEl.ValueKind == System.Text.Json.JsonValueKind.Number)
+                                                        hedefHiz = hhEl.GetDecimal();
+                                                }
+                                                if (root.TryGetProperty("set_sayisi", out var ssEl))
+                                                {
+                                                    var ssStr = ssEl.GetString();
+                                                    if (int.TryParse(ssStr, out var ss))
+                                                        setSayisi = ss;
+                                                }
+                                                if (root.TryGetProperty("toplam_miktar", out var tmEl))
+                                                {
+                                                    if (tmEl.ValueKind == System.Text.Json.JsonValueKind.Number)
+                                                        toplamMiktar = tmEl.GetDecimal();
+                                                }
+                                                
+                                                jobParamsFound = (silindirCevresi > 0 && hedefHiz > 0 && setSayisi > 0 && toplamMiktar > 0);
+                                            }
+                                            catch { }
+                                        }
+                                    }
+                                    jobCycleReader.Close();
+                                }
+                                
+                                if (jobParamsFound && snapshotEndFullLiveData != null)
+                                {
+                                    // Geçmiş günler için: Snapshot sonu - Snapshot başı
+                                    // Snapshot sonu var: Farkı hesapla
+                                    decimal periodProduction = Math.Max(0, (snapshotEndProduction ?? 0) - (snapshotStartProduction ?? 0));
+                                    decimal periodStoppage = Math.Max(0, (snapshotEndStoppage ?? 0) - (snapshotStartStoppage ?? 0));
+                                    decimal periodWastageBefore = Math.Max(0, (snapshotEndWastageBefore ?? 0) - (snapshotStartWastageBefore ?? 0));
+                                    decimal periodWastageAfter = Math.Max(0, (snapshotEndWastageAfter ?? 0) - (snapshotStartWastageAfter ?? 0));
+                                    decimal periodWastageAfterQualityControl = 0; // Devam eden işler için 0 (iş henüz bitmemiş)
+                                    decimal periodRemainingWork = ParseRemainingWorkFromJson(snapshotStartFullLiveData) ?? 0;
+
+                                    // OEE hesapla (yukarıdaki mantıkla aynı)
+                                    // periodRemainingWork > 0 ise: snapshot'tan gelen remainingWork kullan (devam eden iş)
+                                    // periodRemainingWork <= 0 ise: JobEndReports.kalan_miktar kullan (iş daha önce basıldıysa kalan miktar)
+                                    // Devam eden işler için kalan_miktar'ı JobEndReports'tan al
+                                    decimal activeJobKalanMiktar = 0;
+                                    if (!string.IsNullOrEmpty(activeSiparisNo))
+                                    {
+                                        var kalanMiktarQuery = @"
+                                            SELECT TOP 1
+                                                COALESCE(TRY_CAST(REPLACE(CAST(COALESCE(kalan_miktar, '0') AS NVARCHAR(MAX)), ',', '.') AS DECIMAL(18,2)), 0) AS kalan_miktar
+                                            FROM JobEndReports
+                                            WHERE siparis_no = @siparisNo
+                                            ORDER BY job_end_time DESC";
+                                        
+                                        using var kalanMiktarCmd = new SqlCommand(kalanMiktarQuery, connection);
+                                        kalanMiktarCmd.Parameters.AddWithValue("@siparisNo", activeSiparisNo);
+                                        
+                                        using var kalanMiktarReader = await kalanMiktarCmd.ExecuteReaderAsync();
+                                        if (await kalanMiktarReader.ReadAsync())
+                                        {
+                                            activeJobKalanMiktar = kalanMiktarReader.GetDecimal(0);
+                                        }
+                                        kalanMiktarReader.Close();
+                                    }
+                                    
+                                    var hesaplanacakMiktar = (periodRemainingWork > 0) ? periodRemainingWork : activeJobKalanMiktar;
+                                    
+                                    // Sıfır kontrolü - Geçersiz parametreler varsa OEE hesaplama
+                                    if (setSayisi <= 0 || silindirCevresi <= 0 || hedefHiz <= 0 || hesaplanacakMiktar <= 0)
+                                    {
+                                        _logger.LogWarning($"Devam eden iş OEE hesaplama: Geçersiz parametreler - setSayisi={setSayisi}, silindirCevresi={silindirCevresi}, hedefHiz={hedefHiz}, hesaplanacakMiktar={hesaplanacakMiktar}");
+                                    }
+                                    else
+                                    {
+                                        var adim1 = hesaplanacakMiktar / setSayisi;
+                                        var adim2 = silindirCevresi / 1000;
+                                        var adim3 = adim2 / hedefHiz;
+                                        var planlananSure = adim1 * adim3;
+                                        
+                                        _logger.LogInformation($"Devam eden iş OEE hesaplama - siparisNo={activeSiparisNo}, hesaplanacakMiktar={hesaplanacakMiktar}, setSayisi={setSayisi}, silindirCevresi={silindirCevresi}, hedefHiz={hedefHiz}, planlananSure={planlananSure}");
+
+                                        // Gerçek çalışma süresi = Periyot süresi - Duruş süresi
+                                        var periyotSuresiDakika = (decimal)(periodEnd - periodStart).TotalMinutes;
+                                        var durusSuresiDakika = (periodStoppage / 1000) / 60;
+                                        var runTimeForAvailability = periyotSuresiDakika - durusSuresiDakika;
+                                        if (runTimeForAvailability < 0) runTimeForAvailability = 0;
+                                        var availability = planlananSure > 0 ? (double)((runTimeForAvailability / planlananSure) * 100) : 0;
+                                        availability = Math.Max(0, Math.Min(100, availability));
+
+                                        // 2. Performance = (Average Speed / Target Speed) × 100
+                                        //    average_speed: dataRecords'tan hesaplanır (MachineSpeed >= 65)
+                                        //    hedefHiz: Target speed (m/dk)
+                                        decimal? activeJobAverageSpeed = null;
+                                        try
+                                        {
+                                            var avgSpeedQuery = @"
+                                                SELECT AVG(CAST(MachineSpeed AS FLOAT)) AS average_speed
+                                                FROM dataRecords
+                                                WHERE KayitZamani >= @periodStart 
+                                                  AND KayitZamani <= @periodEnd
+                                                  AND MachineSpeed >= 65";
+                                            
+                                            using var avgSpeedCmd = new SqlCommand(avgSpeedQuery, connection);
+                                            avgSpeedCmd.Parameters.AddWithValue("@periodStart", periodStart);
+                                            avgSpeedCmd.Parameters.AddWithValue("@periodEnd", periodEnd);
+                                            
+                                            using var avgSpeedReader = await avgSpeedCmd.ExecuteReaderAsync();
+                                            if (await avgSpeedReader.ReadAsync())
+                                            {
+                                                if (!avgSpeedReader.IsDBNull(0))
+                                                {
+                                                    activeJobAverageSpeed = Convert.ToDecimal(avgSpeedReader.GetDouble(0));
+                                                }
+                                            }
+                                            avgSpeedReader.Close();
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            _logger.LogWarning(ex, $"Devam eden iş için average_speed hesaplanırken hata: {activeSiparisNo}");
+                                        }
+                                        
+                                        // Performance = (Average Speed / Target Speed) × 100
+                                        var performance = (activeJobAverageSpeed.HasValue && activeJobAverageSpeed.Value > 0 && hedefHiz > 0) 
+                                            ? (double)((activeJobAverageSpeed.Value / hedefHiz) * 100) 
+                                            : 0;
+                                        performance = Math.Max(0, Math.Min(100, performance)); // %100'ü geçemez
+
+                                        // Devam eden işler için wastage_after_quality_control yok (iş henüz bitmemiş)
+                                        var dieOncesiAdetActive = (periodWastageBefore * 1000 / silindirCevresi) * setSayisi;
+                                        var hataliUretimActive = dieOncesiAdetActive + periodWastageAfter;
+                                        var goodCount = (decimal)periodProduction - periodWastageAfterQualityControl;
+                                        if (goodCount < 0) goodCount = 0; // Negatif olamaz
+                                        var totalCountForQuality = (decimal)periodProduction + hataliUretimActive;
+                                        var quality = totalCountForQuality > 0 ? (double)((goodCount / totalCountForQuality) * 100) : 0;
+                                        quality = Math.Max(0, Math.Min(100, quality));
+
+                                        var oee = (availability * performance * quality) / 10000.0;
+                                        oee = Math.Max(0, Math.Min(100, oee));
+
+                                        oeeValues.Add((availability, performance, quality, oee));
+                                        
+                                        // Debug için iş bazlı detay ekle
+                                        oeeJobDetails.Add(new
+                                        {
+                                            jobId = 0,
+                                            siparisNo = activeSiparisNo,
+                                            jobStartTime = snapshotStartCycleStartTime,
+                                            jobEndTime = (DateTime?)null,
+                                            setSayisi,
+                                            silindirCevresi,
+                                            hedefHiz,
+                                            toplamMiktar,
+                                            periodProduction,
+                                            periodWastageBefore,
+                                            periodWastageAfter,
+                                            periodStoppage,
+                                            periodRemainingWork,
+                                            periodWastageAfterQualityControl,
+                                            // Performance için
+                                            averageSpeed = activeJobAverageSpeed.HasValue ? Math.Round(activeJobAverageSpeed.Value, 2) : (decimal?)null,
+                                            periodStartForJob = periodStart,
+                                            periodEndForJob = periodEnd,
+                                            // Formül ara değerleri
+                                            plannedTimeMinutes = planlananSure,
+                                            runTimeAvailabilityMinutes = runTimeForAvailability,
+                                            periyotSuresiDakika = periyotSuresiDakika,
+                                            durusSuresiDakika = durusSuresiDakika,
+                                            dieOncesiAdet = Math.Round(dieOncesiAdetActive, 0),
+                                            hataliUretim = Math.Round(hataliUretimActive, 0),
+                                            goodCountUnits = goodCount,
+                                            totalCountForQualityUnits = totalCountForQuality,
+                                            // Veri kaynakları
+                                            dataSource = new
+                                            {
+                                                plannedTimeSource = "Periyot içinde üretilen miktar (periodProduction) üzerinden hesaplanır",
+                                                productionSource = "snapshotEnd.actual_production - snapshotStart.actual_production",
+                                                stoppageSource = "snapshotEnd.total_stoppage_duration - snapshotStart.total_stoppage_duration",
+                                                wastageSource = "snapshotEnd.wastage - snapshotStart.wastage",
+                                                averageSpeedSource = $"dataRecords (MachineSpeed >= 65, {periodStart:yyyy-MM-dd HH:mm:ss} - {periodEnd:yyyy-MM-dd HH:mm:ss})",
+                                                wastageAfterQualityControlSource = "0 (devam eden iş, henüz QC fire girilmemiş)"
+                                            },
+                                            // Sonuçlar
+                                            availability,
+                                            performance,
+                                            quality,
+                                            oee,
+                                            isActiveJob = true
+                                        });
+                                    } // else (geçerli parametreler)
+                                } // if (jobParamsFound && snapshotEndFullLiveData != null)
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, $"Devam eden iş OEE hesaplanırken hata oluştu: {ex.Message}");
+                    }
                 }
 
                 // Ortalama OEE değerlerini hesapla
-                if (oeeValues.Count > 0)
+                // Bugün için OEE hesaplanmaz, sadece geçmiş günler için log göster
+                if (!isTodayPeriod)
                 {
-                    calculatedAvailability = oeeValues.Average(v => v.availability);
-                    calculatedPerformance = oeeValues.Average(v => v.performance);
-                    calculatedQuality = oeeValues.Average(v => v.quality);
-                    calculatedOverallOEE = oeeValues.Average(v => v.overall);
+                    _logger.LogInformation($"OEE hesaplama: {oeeValues.Count} iş için OEE hesaplandı. Period: {period}, Start: {periodStart}, End: {periodEnd}");
+                    if (oeeValues.Count > 0)
+                    {
+                        calculatedAvailability = oeeValues.Average(v => v.availability);
+                        calculatedPerformance = oeeValues.Average(v => v.performance);
+                        calculatedQuality = oeeValues.Average(v => v.quality);
+                        calculatedOverallOEE = oeeValues.Average(v => v.overall);
+                        _logger.LogInformation($"OEE sonuçları - Overall: {calculatedOverallOEE:F2}%, Availability: {calculatedAvailability:F2}%, Performance: {calculatedPerformance:F2}%, Quality: {calculatedQuality:F2}%");
+                    }
+                    else
+                    {
+                        _logger.LogWarning($"OEE hesaplama: Hiç iş bulunamadı veya OEE hesaplanamadı. Period: {period}, Start: {periodStart}, End: {periodEnd}");
+                    }
+                }
+                else
+                {
+                    // Bugün için OEE hesaplanmaz, log gösterilmez
+                    if (oeeValues.Count > 0)
+                    {
+                        calculatedAvailability = oeeValues.Average(v => v.availability);
+                        calculatedPerformance = oeeValues.Average(v => v.performance);
+                        calculatedQuality = oeeValues.Average(v => v.quality);
+                        calculatedOverallOEE = oeeValues.Average(v => v.overall);
+                    }
                 }
 
                 return Ok(new
@@ -1710,12 +2482,14 @@ namespace DashboardBackend.Controllers
                         performance = calculatedPerformance.HasValue ? Math.Round(calculatedPerformance.Value, 2) : (double?)null,
                         quality = calculatedQuality.HasValue ? Math.Round(calculatedQuality.Value, 2) : (double?)null
                     },
+                    // OEE debug bilgileri - frontend doğrulama için
+                    oeeDetails = oeeJobDetails,
                     snapshot = new
                     {
-                        date = snapshotDate,
-                        actualProduction = snapshotProduction.HasValue ? (long?)snapshotProduction.Value : null,
-                        totalStoppageDuration = snapshotStoppage.HasValue ? (long?)snapshotStoppage.Value : null,
-                        energyConsumptionKwh = snapshotEnergy.HasValue ? (double?)snapshotEnergy.Value : null
+                        date = snapshotStartDate,
+                        actualProduction = snapshotStartProduction.HasValue ? (long?)snapshotStartProduction.Value : null,
+                        totalStoppageDuration = snapshotStartStoppage.HasValue ? (long?)snapshotStartStoppage.Value : null,
+                        energyConsumptionKwh = snapshotStartEnergy.HasValue ? (double?)snapshotStartEnergy.Value : null
                     }
                 });
             }

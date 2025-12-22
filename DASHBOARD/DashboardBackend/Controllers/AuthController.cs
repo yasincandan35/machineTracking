@@ -48,6 +48,7 @@ namespace DashboardBackend.Controllers
                 roleSetting.CanCreateUsers,
                 roleSetting.CanDeleteUsers,
                 roleSetting.CanManageRoles,
+                roleSetting.CanUpdateWastageAfterQualityControl,
                 allowedSections = roleSetting.AllowedSections ?? new List<string>()
             };
         }

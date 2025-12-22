@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { getTranslation } from '../../utils/translations';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCardStyle } from '../../hooks/useCardStyle';
 import { PieChart, AlertTriangle, Clock } from 'lucide-react';
 import { createMachineApi } from '../../utils/api';
 
-export default function StoppageChart({ isDark = false, style, currentLanguage = 'tr', selectedMachine }) {
+function StoppageChart({ isDark = false, style, currentLanguage = 'tr', selectedMachine }) {
   const { isLiquidGlass } = useTheme();
   const [stoppageData, setStoppageData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -110,12 +110,17 @@ export default function StoppageChart({ isDark = false, style, currentLanguage =
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const totalDuration = stoppageData.reduce((sum, item) => {
-    return sum + (item.durationSeconds || 0);
-  }, 0);
-  const totalCount = stoppageData.reduce((sum, item) => {
-    return sum + (item.count || 0);
-  }, 0);
+  const totalDuration = useMemo(() => {
+    return stoppageData.reduce((sum, item) => {
+      return sum + (item.durationSeconds || 0);
+    }, 0);
+  }, [stoppageData]);
+  
+  const totalCount = useMemo(() => {
+    return stoppageData.reduce((sum, item) => {
+      return sum + (item.count || 0);
+    }, 0);
+  }, [stoppageData]);
   
   // Daha geniş renk paleti - daha fazla duruş türü için
   const colors = [
@@ -124,6 +129,51 @@ export default function StoppageChart({ isDark = false, style, currentLanguage =
     '#0ea5e9', '#f87171', '#fbbf24', '#34d399', '#c084fc', '#fdba74',
     '#22d3ee', '#fb7185', '#fcd34d', '#6ee7b7', '#d8b4fe', '#fed7aa'
   ];
+
+  // Pasta grafiği path'lerini memoize et (hooks component'in en üst seviyesinde olmalı)
+  const pieChartPaths = useMemo(() => {
+    if (stoppageData.length === 0 || totalDuration === 0) {
+      return [];
+    }
+
+    let cumulativePercentage = 0;
+    
+    return stoppageData.map((item, index) => {
+      const percentage = (item.durationSeconds / totalDuration) * 100;
+      const startAngle = (cumulativePercentage / 100) * 360;
+      const endAngle = ((cumulativePercentage + percentage) / 100) * 360;
+      cumulativePercentage += percentage;
+      
+      const radius = 100;
+      const centerX = 100;
+      const centerY = 100;
+      
+      const startAngleRad = (startAngle - 90) * (Math.PI / 180);
+      const endAngleRad = (endAngle - 90) * (Math.PI / 180);
+      
+      const x1 = centerX + radius * Math.cos(startAngleRad);
+      const y1 = centerY + radius * Math.sin(startAngleRad);
+      const x2 = centerX + radius * Math.cos(endAngleRad);
+      const y2 = centerY + radius * Math.sin(endAngleRad);
+      
+      const largeArcFlag = percentage > 50 ? 1 : 0;
+      
+      const pathData = [
+        `M ${centerX} ${centerY}`,
+        `L ${x1} ${y1}`,
+        `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+        'Z'
+      ].join(' ');
+      
+      return {
+        index,
+        item,
+        percentage,
+        pathData,
+        color: colors[index % colors.length]
+      };
+    });
+  }, [stoppageData, totalDuration]);
 
   return (
     <div 
@@ -162,60 +212,30 @@ export default function StoppageChart({ isDark = false, style, currentLanguage =
                 style={{ overflow: 'visible' }}
               >
               <svg viewBox="0 0 200 200" className="w-full h-full" style={{ overflow: 'visible' }}>
-                {(() => {
-                  let cumulativePercentage = 0;
+                {pieChartPaths.map(({ index, item, percentage, pathData, color }) => {
+                  const isHovered = hoveredSlice && hoveredSlice.index === index;
+                  const scale = isHovered ? 1.1 : 1;
                   
-                  return stoppageData.map((item, index) => {
-                    const percentage = (item.durationSeconds / totalDuration) * 100;
-                    const startAngle = (cumulativePercentage / 100) * 360;
-                    const endAngle = ((cumulativePercentage + percentage) / 100) * 360;
-                    cumulativePercentage += percentage;
-                    
-                    const radius = 100;
-                    const centerX = 100;
-                    const centerY = 100;
-                    
-                    const startAngleRad = (startAngle - 90) * (Math.PI / 180);
-                    const endAngleRad = (endAngle - 90) * (Math.PI / 180);
-                    
-                    const x1 = centerX + radius * Math.cos(startAngleRad);
-                    const y1 = centerY + radius * Math.sin(startAngleRad);
-                    const x2 = centerX + radius * Math.cos(endAngleRad);
-                    const y2 = centerY + radius * Math.sin(endAngleRad);
-                    
-                    const largeArcFlag = percentage > 50 ? 1 : 0;
-                    
-                    const pathData = [
-                      `M ${centerX} ${centerY}`,
-                      `L ${x1} ${y1}`,
-                      `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
-                      'Z'
-                    ].join(' ');
-                    
-                                const isHovered = hoveredSlice && hoveredSlice.index === index;
-                                const scale = isHovered ? 1.1 : 1;
-                                
-                                return (
-                                  <g key={index}>
-                                    <path
-                                      d={pathData}
-                                      fill={colors[index % colors.length]}
-                                      stroke="transparent"
-                                      strokeWidth="0"
-                                      onMouseEnter={() => setHoveredSlice({ index, item, percentage })}
-                                      onMouseLeave={() => setHoveredSlice(null)}
-                                      style={{ 
-                                        cursor: 'pointer',
-                                        transform: `scale(${scale})`,
-                                        transformOrigin: '100px 100px',
-                                        transition: 'all 0.2s ease',
-                                        filter: isHovered ? 'drop-shadow(0 16px 6px rgba(0, 0, 0, 0.9))' : 'none'
-                                      }}
-                                    />
-                                  </g>
-                                );
-                  });
-                })()}
+                  return (
+                    <g key={index}>
+                      <path
+                        d={pathData}
+                        fill={color}
+                        stroke="transparent"
+                        strokeWidth="0"
+                        onMouseEnter={() => setHoveredSlice({ index, item, percentage })}
+                        onMouseLeave={() => setHoveredSlice(null)}
+                        style={{ 
+                          cursor: 'pointer',
+                          transform: `scale(${scale})`,
+                          transformOrigin: '100px 100px',
+                          transition: 'all 0.2s ease',
+                          filter: isHovered ? 'drop-shadow(0 16px 6px rgba(0, 0, 0, 0.9))' : 'none'
+                        }}
+                      />
+                    </g>
+                  );
+                })}
               </svg>
               
               {/* Tooltip */}
@@ -387,3 +407,14 @@ export default function StoppageChart({ isDark = false, style, currentLanguage =
     </div>
   );
 }
+
+export default React.memo(StoppageChart, (prevProps, nextProps) => {
+  // Sadece önemli prop'lar değiştiğinde re-render et
+  return (
+    prevProps.isDark === nextProps.isDark &&
+    prevProps.currentLanguage === nextProps.currentLanguage &&
+    prevProps.selectedMachine?.id === nextProps.selectedMachine?.id &&
+    prevProps.selectedMachine?.tableName === nextProps.selectedMachine?.tableName &&
+    JSON.stringify(prevProps.style) === JSON.stringify(nextProps.style)
+  );
+});

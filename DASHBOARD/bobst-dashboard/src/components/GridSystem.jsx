@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -44,7 +44,7 @@ export default function GridSystem({
   // JOB kartı bileşeni - hover efektleri ile (diğer kartlar gibi)
   const JobCard = () => (
     <div 
-      className={`h-full relative p-4 transition-all duration-300 cursor-pointer group ${
+      className={`h-full relative p-4 transition-all duration-300 group ${
         isLiquidGlass 
           ? 'glass-card'
           : 'rounded-xl shadow-md hover:shadow-lg bg-gray-50 dark:bg-gray-800 dark:text-gray-100 hover:scale-[1.01]'
@@ -116,7 +116,7 @@ export default function GridSystem({
   // Production Summary kartı - hover efektleri ile (diğer kartlar gibi)
   const ProductionSummary = () => (
     <div 
-      className={`h-full relative p-6 transition-all duration-300 cursor-pointer group ${
+      className={`h-full relative p-6 transition-all duration-300 group ${
         isLiquidGlass 
           ? 'glass-card'
           : 'rounded-xl shadow-md hover:shadow-lg bg-gray-50 dark:bg-gray-800 dark:text-gray-100 hover:scale-[1.01]'
@@ -215,7 +215,7 @@ export default function GridSystem({
       style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} 
       currentLanguage={currentLanguage} 
     />,
-    oeeGauge: () => <OEEGauge darkMode={darkMode} colorSettings={colorSettings} liveData={liveData} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} />,
+    oeeGauge: () => <OEEGauge darkMode={darkMode} colorSettings={colorSettings} liveData={liveData} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} selectedMachine={selectedMachine} />,
     stoppageChart: () => <StoppageChart isDark={darkMode} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} selectedMachine={selectedMachine} />,
     
     // Periyodik Özet Kartları
@@ -328,6 +328,35 @@ export default function GridSystem({
 
   // Grid layout debug kaldırıldı - console temiz olsun
 
+  // Scroll event'lerinin geçmesi için ref ve useEffect
+  const gridContainerRef = useRef(null);
+
+  useEffect(() => {
+    const container = gridContainerRef.current;
+    if (!container) return;
+
+    // Wheel event'lerini dinle ve React Grid Layout'un scroll event'lerini engellemesini önle
+    const handleWheel = (e) => {
+      // Eğer drag handle üzerinde değilse, scroll event'inin geçmesine izin ver
+      const target = e.target;
+      const isDragHandle = target.closest('.drag-handle');
+      
+      if (!isDragHandle) {
+        // React Grid Layout'un event'i yakalamasını engelle, ama normal scroll davranışını koru
+        // Event'i durdurmuyoruz, sadece React Grid Layout'un yakalamasını engelliyoruz
+        e.stopImmediatePropagation();
+      }
+    };
+
+    // Capture phase'de dinle ki React Grid Layout'tan önce yakalansın
+    // passive: false çünkü stopImmediatePropagation kullanıyoruz
+    container.addEventListener('wheel', handleWheel, { passive: false, capture: true });
+
+    return () => {
+      container.removeEventListener('wheel', handleWheel, { capture: true });
+    };
+  }, []);
+
   // Mobile için basit liste, desktop için grid
   const isMobile = window.innerWidth < 768;
   
@@ -344,7 +373,7 @@ export default function GridSystem({
   }
 
   return (
-    <div className="px-8 pt-4 grid-mobile">
+    <div className="px-8 pt-4 grid-mobile" ref={gridContainerRef}>
       <ResponsiveGridLayout
         className="layout"
         layouts={layouts}
@@ -368,18 +397,51 @@ export default function GridSystem({
         }}
       >
         {allCards.map(key => (
-          <div key={key} className="grid-item group">
+          <div key={key} className="grid-item group" style={{ cursor: 'default' }}>
             {/* Drag Handle - Kartın üst kısmı */}
             <div 
-              className="drag-handle absolute top-0 left-0 right-0 h-8 cursor-move z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+              className="drag-handle absolute top-0 left-0 right-0 h-8 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
               style={{
                 background: 'linear-gradient(to bottom, rgba(59, 130, 246, 0.1), transparent)',
                 borderTopLeftRadius: '12px',
-                borderTopRightRadius: '12px'
+                borderTopRightRadius: '12px',
+                cursor: 'grab',
+                pointerEvents: 'auto'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.cursor = 'grab';
+                // Parent grid item'a da grab cursor ver
+                const gridItem = e.currentTarget.closest('.react-grid-item');
+                if (gridItem) {
+                  gridItem.style.cursor = 'grab';
+                }
+              }}
+              onMouseDown={(e) => {
+                e.currentTarget.style.cursor = 'grabbing';
+                // Drag başladığında parent'a da grabbing cursor ver
+                const gridItem = e.currentTarget.closest('.react-grid-item');
+                if (gridItem) {
+                  gridItem.style.cursor = 'grabbing';
+                }
+              }}
+              onMouseUp={(e) => {
+                e.currentTarget.style.cursor = 'grab';
+                const gridItem = e.currentTarget.closest('.react-grid-item');
+                if (gridItem) {
+                  gridItem.style.cursor = 'grab';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.cursor = 'grab';
+                // Mouse ayrıldığında parent'a default cursor ver
+                const gridItem = e.currentTarget.closest('.react-grid-item');
+                if (gridItem) {
+                  gridItem.style.cursor = 'default';
+                }
               }}
             >
-              <div className="flex items-center justify-center h-full">
-                <div className="flex gap-1">
+              <div className="flex items-center justify-center h-full" style={{ pointerEvents: 'none' }}>
+                <div className="flex gap-1" style={{ pointerEvents: 'none' }}>
                   <div className="w-1 h-1 bg-blue-400 rounded-full"></div>
                   <div className="w-1 h-1 bg-blue-400 rounded-full"></div>
                   <div className="w-1 h-1 bg-blue-400 rounded-full"></div>

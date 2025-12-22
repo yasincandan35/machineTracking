@@ -9,7 +9,7 @@ export const useDashboardData = (userId, currentLanguage, activeTab = 'home') =>
   const [machineList, setMachineList] = useState([]);
   const [selectedMachine, setSelectedMachine] = useState(null);
   const shouldFetchLive = activeTab === 'home' || activeTab === 'analysis';
-  const shouldFetchRange = activeTab === 'home' || activeTab === 'analysis';
+  const shouldFetchRange = activeTab === 'analysis'; // Sadece analiz sekmesinde range verisi gerekli
 
   // Makine listesini yükle fonksiyonu
   const loadMachineList = async () => {
@@ -119,6 +119,10 @@ export const useDashboardData = (userId, currentLanguage, activeTab = 'home') =>
         const lastId = res.data?.machineId;
         const match = machineList.find(m => m.id === lastId);
         setSelectedMachine(prevSelected => {
+          // Eğer seçili makine zaten aynıysa, state'i güncelleme (blink'i önlemek için)
+          if (match && prevSelected && prevSelected.id === match.id) {
+            return prevSelected; // Aynı makine, state değişikliği yapma
+          }
           if (match) {
             console.log('✅ Son seçilen makina yüklendi:', match.name);
             return match;
@@ -216,7 +220,7 @@ export const useDashboardData = (userId, currentLanguage, activeTab = 'home') =>
         }));
       }
     };
-
+    
     const fetchPLCData = () => {
       // Artık tüm API'ler tek backend'den geliyor (DashboardBackend - port 5199)
       const isProduction = window.location.hostname === 'track.bychome.xyz';
@@ -418,22 +422,18 @@ export const useDashboardData = (userId, currentLanguage, activeTab = 'home') =>
     return () => clearInterval(intv);
   }, [currentLanguage, selectedMachine, shouldFetchLive]); // 🆕 selectedMachine değişince yeniden bağlan
 
-  // Range verisi çek (stoppage chart gibi diğer kartlar için)
+  // Range verisi çek (sadece analiz sekmesi için)
   useEffect(() => {
     if (!shouldFetchRange) {
-      console.log('⏸️ Aktif sekme range verisi gerektirmiyor');
       setRangeData([]);
       return;
     }
 
     // Main Dashboard (id: -1) için range verisi çekme
     if (!selectedMachine?.tableName || selectedMachine.id === -1) {
-      console.log('🌐 Main Dashboard veya makine yok, range verisi temizleniyor');
       setRangeData([]);
       return;
     }
-    
-    console.log('🔄 Range verisi çekiliyor:', selectedMachine.name, 'Range:', range, 'TableName:', selectedMachine.tableName);
     
     sensorApi.get(`/api/sensors/period?range=${range}&machineId=${selectedMachine.tableName}`)
       .then(res => {

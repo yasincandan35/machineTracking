@@ -176,9 +176,12 @@ const StoppageInfoCard = ({ currentOrder }) => {
                       'Z'
                     ].join(' ');
                     
+          // Unique key oluştur: reasonName + index + duration
+          const uniqueKey = `path-${item.reasonName || 'unknown'}-${index}-${item.durationSeconds || 0}`;
+          
           return (
             <path
-              key={item.reasonName || index}
+              key={uniqueKey}
               d={pathData}
               fill={colors[index % colors.length]}
               stroke="rgba(30, 41, 59, 0.5)"
@@ -204,8 +207,11 @@ const StoppageInfoCard = ({ currentOrder }) => {
                   ? ((item.durationSeconds / totalDuration) * 100).toFixed(1) 
                   : 0;
                 
+                // Unique key oluştur: reasonName + index + count
+                const uniqueKey = `${item.reasonName || 'unknown'}-${index}-${item.count || 0}`;
+                
                 return (
-                  <div key={item.reasonName || index} className="stoppage-item">
+                  <div key={uniqueKey} className="stoppage-item">
                     <div className="stoppage-item-header">
                       <div 
                         className="stoppage-color-dot" 

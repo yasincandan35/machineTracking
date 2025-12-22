@@ -15,6 +15,7 @@ using DashboardBackend.Data;
 using DashboardBackend.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System.Net.Http;
 
 namespace DashboardBackend.Services.PLC
 {
@@ -498,8 +499,12 @@ namespace DashboardBackend.Services.PLC
                     }
                 }
                 
-                // Eğer başlangıç değeri hala 0 ise, initial_snapshot'tan almayı dene
-                if (totalEnergyKwhStart == 0.0 && activeCycle != null && activeCycle.TryGetValue("initial_snapshot", out var initialSnapshotStr) && initialSnapshotStr != null)
+                // Başlangıç değerini JobCycleRecords tablosundaki active satırındaki initial_snapshot'tan al
+                // Önce activeCycle'dan dene, eğer yoksa sipariş numarasına göre en son kaydı bul
+                Dictionary<string, object>? dbCycleRecord = null;
+                
+                // Önce activeCycle'dan initial_snapshot'ı al
+                if (activeCycle != null && activeCycle.TryGetValue("initial_snapshot", out var initialSnapshotStr) && initialSnapshotStr != null)
                 {
                     try
                     {
@@ -510,38 +515,37 @@ namespace DashboardBackend.Services.PLC
                             if (initialSnapshot.TryGetValue("TotalEnergy", out var totalEnergyObj))
                             {
                                 totalEnergyKwhStart = ToDouble(totalEnergyObj);
-                                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhStart initial_snapshot'tan (TotalEnergy) alındı: {totalEnergyKwhStart:F2} kWh");
+                                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhStart active satırındaki initial_snapshot'tan (TotalEnergy) alındı: {totalEnergyKwhStart:F2} kWh");
                             }
                             else if (initialSnapshot.TryGetValue("totalEnergyKwh", out var totalEnergyKwhObj))
                             {
                                 totalEnergyKwhStart = ToDouble(totalEnergyKwhObj);
-                                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhStart initial_snapshot'tan (totalEnergyKwh) alındı: {totalEnergyKwhStart:F2} kWh");
+                                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhStart active satırındaki initial_snapshot'tan (totalEnergyKwh) alındı: {totalEnergyKwhStart:F2} kWh");
                             }
                             else if (initialSnapshot.TryGetValue("TotalEnergyKwh", out var totalEnergyKwhObj2))
                             {
                                 totalEnergyKwhStart = ToDouble(totalEnergyKwhObj2);
-                                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhStart initial_snapshot'tan (TotalEnergyKwh) alındı: {totalEnergyKwhStart:F2} kWh");
+                                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhStart active satırındaki initial_snapshot'tan (TotalEnergyKwh) alındı: {totalEnergyKwhStart:F2} kWh");
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠️ [EndJobAsync] initial_snapshot parse hatası: {ex.Message}");
+                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠️ [EndJobAsync] active satırındaki initial_snapshot parse hatası: {ex.Message}");
                     }
                 }
                 
-                // Eğer hala 0 ise ve activeCycle null veya snapshot yoksa, veritabanından sipariş numarasına göre ara
-                Dictionary<string, object>? dbCycleRecord = null;
-                if ((totalEnergyKwhStart == 0.0 || totalEnergyKwhEnd == 0.0) && currentJobData != null && currentJobData.ContainsKey("siparis_no"))
+                // Eğer activeCycle'da bulunamadıysa, sipariş numarasına göre en son kaydı bul
+                if (totalEnergyKwhStart == 0.0 && currentJobData != null && currentJobData.ContainsKey("siparis_no"))
                 {
                     var dbOrderNumber = currentJobData["siparis_no"]?.ToString();
                     if (!string.IsNullOrWhiteSpace(dbOrderNumber))
                     {
-                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 🔍 [EndJobAsync] activeCycle'da snapshot bulunamadı, veritabanından sipariş numarasına göre aranıyor: {dbOrderNumber}");
+                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 🔍 [EndJobAsync] active satırında snapshot bulunamadı, sipariş numarasına göre aranıyor: {dbOrderNumber}");
                         dbCycleRecord = await GetJobCycleRecordByOrderNumberAsync(dbOrderNumber);
                         
                         // Initial snapshot'ı oku
-                        if (totalEnergyKwhStart == 0.0 && dbCycleRecord != null && dbCycleRecord.TryGetValue("initial_snapshot", out var dbInitialSnapshotStr) && dbInitialSnapshotStr != null)
+                        if (dbCycleRecord != null && dbCycleRecord.TryGetValue("initial_snapshot", out var dbInitialSnapshotStr) && dbInitialSnapshotStr != null)
                         {
                             try
                             {
@@ -551,23 +555,23 @@ namespace DashboardBackend.Services.PLC
                                     if (initialSnapshot.TryGetValue("TotalEnergy", out var totalEnergyObj))
                                     {
                                         totalEnergyKwhStart = ToDouble(totalEnergyObj);
-                                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhStart veritabanından initial_snapshot'tan (TotalEnergy) alındı: {totalEnergyKwhStart:F2} kWh");
+                                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhStart sipariş numarasına göre bulunan initial_snapshot'tan (TotalEnergy) alındı: {totalEnergyKwhStart:F2} kWh");
                                     }
                                     else if (initialSnapshot.TryGetValue("totalEnergyKwh", out var totalEnergyKwhObj))
                                     {
                                         totalEnergyKwhStart = ToDouble(totalEnergyKwhObj);
-                                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhStart veritabanından initial_snapshot'tan (totalEnergyKwh) alındı: {totalEnergyKwhStart:F2} kWh");
+                                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhStart sipariş numarasına göre bulunan initial_snapshot'tan (totalEnergyKwh) alındı: {totalEnergyKwhStart:F2} kWh");
                                     }
                                     else if (initialSnapshot.TryGetValue("TotalEnergyKwh", out var totalEnergyKwhObj2))
                                     {
                                         totalEnergyKwhStart = ToDouble(totalEnergyKwhObj2);
-                                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhStart veritabanından initial_snapshot'tan (TotalEnergyKwh) alındı: {totalEnergyKwhStart:F2} kWh");
+                                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 💾 [EndJobAsync] totalEnergyKwhStart sipariş numarasına göre bulunan initial_snapshot'tan (TotalEnergyKwh) alındı: {totalEnergyKwhStart:F2} kWh");
                                     }
                                 }
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠️ [EndJobAsync] Veritabanından initial_snapshot parse hatası: {ex.Message}");
+                                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠️ [EndJobAsync] Sipariş numarasına göre bulunan initial_snapshot parse hatası: {ex.Message}");
                             }
                         }
                     }
@@ -578,8 +582,96 @@ namespace DashboardBackend.Services.PLC
                     Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠️ [EndJobAsync] totalEnergyKwhStart bulunamadı, 0 kullanılıyor");
                 }
                 
-                // Bitiş değerini PLC'den al - önce TotalEnergy key'ini dene (en yaygın)
-                if (currentData != null)
+                // Bitiş değerini API endpoint'inden al (http://192.168.1.44:5199/api/plcdata/data?machine=...)
+                // Önce connectionString'den veritabanı adını çıkar, sonra Machines tablosundan tableName'i bul
+                string? machineTableName = null;
+                try
+                {
+                    // connectionString'den Database adını çıkar (örn: "Database=lemanic3_tracking")
+                    var dbNameMatch = System.Text.RegularExpressions.Regex.Match(connectionString, @"Database=([^;]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    if (dbNameMatch.Success)
+                    {
+                        var dbName = dbNameMatch.Groups[1].Value.Trim();
+                        
+                        // DashboardBackend veritabanına bağlan ve Machines tablosundan tableName'i bul
+                        var dashboardBackendConnStr = "Server=192.168.1.44;Database=DashboardBackend;User Id=sa;Password=Yyc12345;TrustServerCertificate=true;Connection Timeout=30;";
+                        using var dashboardConn = new SqlConnection(dashboardBackendConnStr);
+                        await dashboardConn.OpenAsync();
+                        
+                        var machineQuery = @"
+                            SELECT TOP 1 TableName 
+                            FROM Machines 
+                            WHERE DatabaseName = @dbName OR Name = @dbName OR TableName = @dbName";
+                        using var machineCmd = new SqlCommand(machineQuery, dashboardConn);
+                        machineCmd.Parameters.AddWithValue("@dbName", dbName);
+                        using var machineReader = await machineCmd.ExecuteReaderAsync();
+                        if (await machineReader.ReadAsync())
+                        {
+                            machineTableName = machineReader["TableName"]?.ToString();
+                            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 🔍 [EndJobAsync] Makine tableName bulundu: {machineTableName}");
+                        }
+                        else
+                        {
+                            // Eğer Machines tablosunda bulunamazsa, dbName'i direkt kullan
+                            machineTableName = dbName;
+                            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠️ [EndJobAsync] Machines tablosunda bulunamadı, dbName kullanılıyor: {machineTableName}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠️ [EndJobAsync] Makine adı bulunamadı: {ex.Message}");
+                }
+                
+                // API endpoint'inden totalEnergyKwh değerini al
+                if (!string.IsNullOrEmpty(machineTableName))
+                {
+                    try
+                    {
+                        using var httpClient = new HttpClient();
+                        httpClient.Timeout = TimeSpan.FromSeconds(10);
+                        var apiUrl = $"http://192.168.1.44:5199/api/plcdata/data?machine={Uri.EscapeDataString(machineTableName)}";
+                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] 🌐 [EndJobAsync] API'den enerji değeri çekiliyor: {apiUrl}");
+                        
+                        var response = await httpClient.GetAsync(apiUrl);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var jsonContent = await response.Content.ReadAsStringAsync();
+                            var apiData = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonContent);
+                            
+                            if (apiData != null)
+                            {
+                                // totalEnergyKwh, TotalEnergy veya TotalEnergyKwh key'lerini dene
+                                if (apiData.TryGetValue("totalEnergyKwh", out var totalEnergyKwhObj))
+                                {
+                                    totalEnergyKwhEnd = ToDouble(totalEnergyKwhObj);
+                                    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ✅ [EndJobAsync] totalEnergyKwhEnd API'den (totalEnergyKwh) alındı: {totalEnergyKwhEnd:F2} kWh");
+                                }
+                                else if (apiData.TryGetValue("TotalEnergy", out var totalEnergyObj))
+                                {
+                                    totalEnergyKwhEnd = ToDouble(totalEnergyObj);
+                                    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ✅ [EndJobAsync] totalEnergyKwhEnd API'den (TotalEnergy) alındı: {totalEnergyKwhEnd:F2} kWh");
+                                }
+                                else if (apiData.TryGetValue("TotalEnergyKwh", out var totalEnergyKwhObj2))
+                                {
+                                    totalEnergyKwhEnd = ToDouble(totalEnergyKwhObj2);
+                                    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ✅ [EndJobAsync] totalEnergyKwhEnd API'den (TotalEnergyKwh) alındı: {totalEnergyKwhEnd:F2} kWh");
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠️ [EndJobAsync] API'den enerji değeri alınamadı: HTTP {response.StatusCode}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠️ [EndJobAsync] API'den enerji değeri çekilirken hata: {ex.Message}");
+                    }
+                }
+                
+                // Eğer API'den alınamadıysa, PLC'den almayı dene (fallback)
+                if (totalEnergyKwhEnd == 0.0 && currentData != null)
                 {
                     if (currentData.Data.TryGetValue("TotalEnergy", out var rawEnergyEnd2))
                     {
@@ -3645,6 +3737,121 @@ namespace DashboardBackend.Services.PLC
                 LogMessage("✅ Veritabanı bağlantısı başarılı");
                 await EnsureJobEndReportsTableAsync(conn);
                 
+                // İş bitince ortalama hızı ve runTime'ı hesapla (65 m/dk threshold - gravür baskı makineleri için)
+                var jobStartTime = GetDateTime(reportData, "jobStartTime", DateTime.UtcNow);
+                var jobEndTime = GetDateTime(reportData, "jobEndTime", DateTime.UtcNow);
+                decimal? averageSpeed = null;
+                int? runTimeSeconds = null;
+                
+                try
+                {
+                    // Ortalama hız ve runTime'ı tek sorguda hesapla
+                    var speedAndRunTimeQuery = @"
+                        SELECT 
+                            AVG(CAST(MachineSpeed AS FLOAT)) AS average_speed,
+                            COUNT(*) AS run_time_seconds
+                        FROM dataRecords
+                        WHERE KayitZamani >= @job_start_time 
+                          AND KayitZamani <= @job_end_time
+                          AND MachineSpeed >= 65";
+                    
+                    using var speedAndRunTimeCmd = new SqlCommand(speedAndRunTimeQuery, conn);
+                    speedAndRunTimeCmd.Parameters.AddWithValue("@job_start_time", jobStartTime);
+                    speedAndRunTimeCmd.Parameters.AddWithValue("@job_end_time", jobEndTime);
+                    
+                    using var reader = await speedAndRunTimeCmd.ExecuteReaderAsync();
+                    if (await reader.ReadAsync())
+                    {
+                        if (!reader.IsDBNull(0))
+                        {
+                            averageSpeed = Convert.ToDecimal(reader.GetDouble(0));
+                            LogMessage($"📊 İş bazlı ortalama hız hesaplandı: {averageSpeed:F2} m/dk (65 m/dk threshold ile)");
+                        }
+                        
+                        if (!reader.IsDBNull(1))
+                        {
+                            runTimeSeconds = reader.GetInt32(1);
+                            var runTimeMinutes = runTimeSeconds.Value / 60.0;
+                            LogMessage($"⏱️ İş bazlı runTime hesaplandı: {runTimeSeconds} saniye ({runTimeMinutes:F2} dakika)");
+                        }
+                    }
+                    else
+                    {
+                        LogMessage("⚠️ Ortalama hız ve runTime hesaplanamadı (veri bulunamadı veya tüm kayıtlar 65 m/dk altında)");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogMessage($"⚠️ Ortalama hız ve runTime hesaplama hatası: {ex.Message}");
+                    // Hata olsa bile iş sonu raporunu kaydetmeye devam et
+                }
+                
+                // Planlanan üretim süresi hesaplama
+                // planlananSure = (hesaplanacakMiktar / setSayisi) * (silindirCevresi / 1000) / hedefHiz + setup
+                // hesaplanacakMiktar = (kalanMiktar <= 0) ? toplamMiktar : kalanMiktar
+                decimal? plannedProductionTime = null;
+                var kalanMiktar = GetDecimal(reportData, "kalan_miktar");
+                var toplamMiktar = GetDecimal(reportData, "toplam_miktar");
+                var setSayisi = GetInt(reportData, "set_sayisi");
+                var silindirCevresiStr = GetString(reportData, "silindir_cevresi");
+                var hedefHiz = GetInt(reportData, "hedef_hiz");
+                var setup = GetDecimal(reportData, "setup");
+                
+                if (setSayisi > 0 && !string.IsNullOrEmpty(silindirCevresiStr) && hedefHiz > 0)
+                {
+                    try
+                    {
+                        var silindirCevresi = decimal.Parse(silindirCevresiStr.Replace(",", "."), System.Globalization.CultureInfo.InvariantCulture);
+                        if (silindirCevresi > 0)
+                        {
+                            var hesaplanacakMiktar = (kalanMiktar <= 0) ? toplamMiktar : kalanMiktar;
+                            var adim1 = hesaplanacakMiktar / setSayisi;
+                            var adim2 = silindirCevresi / 1000; // mm -> m
+                            var adim3 = adim2 / hedefHiz;
+                            plannedProductionTime = adim1 * adim3 + setup; // Setup dahil
+                            LogMessage($"⏱️ Planlanan üretim süresi hesaplandı: {plannedProductionTime:F2} dakika (setup dahil: {setup:F2} dakika)");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogMessage($"⚠️ Planlanan üretim süresi hesaplama hatası: {ex.Message}");
+                    }
+                }
+                
+                // Fire hesaplamaları
+                var wastageBeforeDie = GetDecimal(reportData, "wastageBeforeDie");
+                var wastageAfterDie = GetDecimal(reportData, "wastageAfterDie");
+                
+                decimal? totalWastagePackage = null;
+                decimal? totalWastageMeters = null;
+                
+                if (wastageAfterDie > 0 && wastageBeforeDie >= 0 && setSayisi > 0 && !string.IsNullOrEmpty(silindirCevresiStr))
+                {
+                    try
+                    {
+                        // silindir_cevresi string olarak geliyor (virgülle), parse et
+                        var silindirCevresi = decimal.Parse(silindirCevresiStr.Replace(",", "."), System.Globalization.CultureInfo.InvariantCulture);
+                        
+                        if (silindirCevresi > 0)
+                        {
+                            // totalWastagePackage = wastageAfterDie + ((wastageBeforeDie*1000/silindir_cevresi)*set_sayisi)
+                            // wastageBeforeDie metre, silindir_cevresi mm -> wastageBeforeDie*1000/silindir_cevresi = tabaka sayısı
+                            // tabaka sayısı * set_sayisi = toplam adet (her tabakada set_sayisi kadar adet var)
+                            totalWastagePackage = wastageAfterDie + ((wastageBeforeDie * 1000 / silindirCevresi) * setSayisi);
+                            
+                            // totalWastageMeters = (wastageAfterDie/set_sayisi)*silindir_cevresi
+                            // wastageAfterDie paket, silindir_cevresi mm -> metreyi bulmak için 1000'e böl
+                            totalWastageMeters = ((wastageAfterDie / setSayisi) * silindirCevresi) / 1000;
+                            
+                            LogMessage($"📦 Fire hesaplamaları: totalWastagePackage={totalWastagePackage:F2}, totalWastageMeters={totalWastageMeters:F2}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogMessage($"⚠️ Fire hesaplama hatası: {ex.Message}");
+                    }
+                }
+                
                 var query = @"
                     INSERT INTO JobEndReports (
                         siparis_no, toplam_miktar, kalan_miktar, set_sayisi, uretim_tipi, stok_adi, bundle,
@@ -3652,14 +3859,20 @@ namespace DashboardBackend.Services.PLC
                         ethyl_alcohol_consumption, ethyl_acetate_consumption,
                         paper_consumption, actual_production, remaining_work, wastage_before_die, wastage_after_die,
                         wastage_ratio, total_stoppage_duration, over_production, completion_percentage,
-                        energy_consumption_kwh, job_start_time, job_end_time, created_at
+                        energy_consumption_kwh, average_speed, run_time_seconds, 
+                        total_wastage_package, total_wastage_meters, wastage_after_quality_control,
+                        planned_production_time,
+                        job_start_time, job_end_time, created_at
                     ) VALUES (
                         @siparis_no, @toplam_miktar, @kalan_miktar, @set_sayisi, @uretim_tipi, @stok_adi, @bundle,
                         @silindir_cevresi, @hedef_hiz, @setup, @qualified_bundle, @defective_bundle, @good_pallets, @defective_pallets,
                         @ethyl_alcohol_consumption, @ethyl_acetate_consumption,
                         @paper_consumption, @actual_production, @remaining_work, @wastage_before_die, @wastage_after_die,
                         @wastage_ratio, @total_stoppage_duration, @over_production, @completion_percentage,
-                        @energy_consumption_kwh, @job_start_time, @job_end_time, @created_at
+                        @energy_consumption_kwh, @average_speed, @run_time_seconds,
+                        @total_wastage_package, @total_wastage_meters, @wastage_after_quality_control,
+                        @planned_production_time,
+                        @job_start_time, @job_end_time, @created_at
                     )";
                 
                 using var cmd = new SqlCommand(query, conn);
@@ -3691,9 +3904,15 @@ namespace DashboardBackend.Services.PLC
                 cmd.Parameters.AddWithValue("@over_production", GetInt(reportData, "overProduction"));
                 cmd.Parameters.AddWithValue("@completion_percentage", GetDecimal(reportData, "completionPercentage"));
                 cmd.Parameters.AddWithValue("@energy_consumption_kwh", GetDecimal(reportData, "energyConsumptionKwh"));
+                cmd.Parameters.AddWithValue("@average_speed", averageSpeed.HasValue ? (object)averageSpeed.Value : DBNull.Value);
+                cmd.Parameters.AddWithValue("@run_time_seconds", runTimeSeconds.HasValue ? (object)runTimeSeconds.Value : DBNull.Value);
+                cmd.Parameters.AddWithValue("@total_wastage_package", totalWastagePackage.HasValue ? (object)totalWastagePackage.Value : DBNull.Value);
+                cmd.Parameters.AddWithValue("@total_wastage_meters", totalWastageMeters.HasValue ? (object)totalWastageMeters.Value : DBNull.Value);
+                cmd.Parameters.AddWithValue("@wastage_after_quality_control", DBNull.Value); // İleride arayüzden girilecek
+                cmd.Parameters.AddWithValue("@planned_production_time", plannedProductionTime.HasValue ? (object)plannedProductionTime.Value : DBNull.Value);
                 
-                cmd.Parameters.AddWithValue("@job_start_time", GetDateTime(reportData, "jobStartTime", DateTime.UtcNow));
-                cmd.Parameters.AddWithValue("@job_end_time", GetDateTime(reportData, "jobEndTime", DateTime.UtcNow));
+                cmd.Parameters.AddWithValue("@job_start_time", jobStartTime);
+                cmd.Parameters.AddWithValue("@job_end_time", jobEndTime);
                 cmd.Parameters.AddWithValue("@created_at", DateTime.Now);
                 
                 LogMessage("📝 SQL sorgusu çalıştırılıyor...");
@@ -4150,6 +4369,13 @@ BEGIN
         over_production INT NULL,
         completion_percentage DECIMAL(18,4) NULL,
         energy_consumption_kwh DECIMAL(18,4) NULL,
+        average_speed DECIMAL(18,2) NULL,
+        run_time_seconds INT NULL,
+        total_wastage_package DECIMAL(18,4) NULL,
+        total_wastage_meters DECIMAL(18,4) NULL,
+        wastage_after_quality_control DECIMAL(18,4) NULL,
+        wastage_after_quality_control_updated_by NVARCHAR(100) NULL,
+        wastage_after_quality_control_updated_at DATETIME2 NULL,
         job_start_time DATETIME2 NOT NULL,
         job_end_time DATETIME2 NOT NULL,
         created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
@@ -4185,6 +4411,13 @@ BEGIN
         over_production INT NULL,
         completion_percentage DECIMAL(18,4) NULL,
         energy_consumption_kwh DECIMAL(18,4) NULL,
+        average_speed DECIMAL(18,2) NULL,
+        run_time_seconds INT NULL,
+        total_wastage_package DECIMAL(18,4) NULL,
+        total_wastage_meters DECIMAL(18,4) NULL,
+        wastage_after_quality_control DECIMAL(18,4) NULL,
+        wastage_after_quality_control_updated_by NVARCHAR(100) NULL,
+        wastage_after_quality_control_updated_at DATETIME2 NULL,
         job_start_time DATETIME2 NOT NULL,
         job_end_time DATETIME2 NOT NULL,
         created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
@@ -4210,7 +4443,10 @@ BEGIN
                 silindir_cevresi, hedef_hiz, ethyl_alcohol_consumption, ethyl_acetate_consumption,
                 paper_consumption, actual_production, remaining_work, wastage_before_die, wastage_after_die,
                 wastage_ratio, total_stoppage_duration, over_production, completion_percentage,
-                energy_consumption_kwh, job_start_time, job_end_time, created_at
+                energy_consumption_kwh, average_speed, run_time_seconds, 
+                total_wastage_package, total_wastage_meters, wastage_after_quality_control,
+                wastage_after_quality_control_updated_by, wastage_after_quality_control_updated_at,
+                job_start_time, job_end_time, created_at
             )
             SELECT
                 id, siparis_no, toplam_miktar, kalan_miktar, set_sayisi, uretim_tipi, stok_adi, bundle,
@@ -4222,6 +4458,13 @@ BEGIN
                     THEN total_energy_kwh_end - total_energy_kwh_start 
                     ELSE NULL 
                 END AS energy_consumption_kwh,
+                NULL AS average_speed,
+                NULL AS run_time_seconds,
+                NULL AS total_wastage_package,
+                NULL AS total_wastage_meters,
+                NULL AS wastage_after_quality_control,
+                NULL AS wastage_after_quality_control_updated_by,
+                NULL AS wastage_after_quality_control_updated_at,
                 job_start_time, job_end_time, created_at
             FROM JobEndReports
             ORDER BY id;';
@@ -4234,7 +4477,10 @@ BEGIN
                 silindir_cevresi, hedef_hiz, ethyl_alcohol_consumption, ethyl_acetate_consumption,
                 paper_consumption, actual_production, remaining_work, wastage_before_die, wastage_after_die,
                 wastage_ratio, total_stoppage_duration, over_production, completion_percentage,
-                energy_consumption_kwh, job_start_time, job_end_time, created_at
+                energy_consumption_kwh, average_speed, run_time_seconds,
+                total_wastage_package, total_wastage_meters, wastage_after_quality_control,
+                wastage_after_quality_control_updated_by, wastage_after_quality_control_updated_at,
+                job_start_time, job_end_time, created_at
             )
             SELECT
                 id, siparis_no, toplam_miktar, kalan_miktar, set_sayisi, uretim_tipi, stok_adi, bundle,
@@ -4242,6 +4488,13 @@ BEGIN
                 paper_consumption, actual_production, remaining_work, wastage_before_die, wastage_after_die,
                 wastage_ratio, total_stoppage_duration, over_production, completion_percentage,
                 NULL AS energy_consumption_kwh,
+                NULL AS average_speed,
+                NULL AS run_time_seconds,
+                NULL AS total_wastage_package,
+                NULL AS total_wastage_meters,
+                NULL AS wastage_after_quality_control,
+                NULL AS wastage_after_quality_control_updated_by,
+                NULL AS wastage_after_quality_control_updated_at,
                 job_start_time, job_end_time, created_at
             FROM JobEndReports
             ORDER BY id;
@@ -4286,6 +4539,48 @@ IF COL_LENGTH('JobEndReports', 'defective_pallets') IS NULL
 BEGIN
     ALTER TABLE JobEndReports
     ADD defective_pallets INT NULL;
+END
+
+IF COL_LENGTH('JobEndReports', 'average_speed') IS NULL
+BEGIN
+    ALTER TABLE JobEndReports
+    ADD average_speed DECIMAL(18,2) NULL;
+END
+
+IF COL_LENGTH('JobEndReports', 'run_time_seconds') IS NULL
+BEGIN
+    ALTER TABLE JobEndReports
+    ADD run_time_seconds INT NULL;
+END
+
+IF COL_LENGTH('JobEndReports', 'total_wastage_package') IS NULL
+BEGIN
+    ALTER TABLE JobEndReports
+    ADD total_wastage_package DECIMAL(18,4) NULL;
+END
+
+IF COL_LENGTH('JobEndReports', 'total_wastage_meters') IS NULL
+BEGIN
+    ALTER TABLE JobEndReports
+    ADD total_wastage_meters DECIMAL(18,4) NULL;
+END
+
+IF COL_LENGTH('JobEndReports', 'wastage_after_quality_control') IS NULL
+BEGIN
+    ALTER TABLE JobEndReports
+    ADD wastage_after_quality_control DECIMAL(18,4) NULL;
+END
+
+IF COL_LENGTH('JobEndReports', 'wastage_after_quality_control_updated_by') IS NULL
+BEGIN
+    ALTER TABLE JobEndReports
+    ADD wastage_after_quality_control_updated_by NVARCHAR(100) NULL;
+END
+
+IF COL_LENGTH('JobEndReports', 'wastage_after_quality_control_updated_at') IS NULL
+BEGIN
+    ALTER TABLE JobEndReports
+    ADD wastage_after_quality_control_updated_at DATETIME2 NULL;
 END
 -- Mevcut kayıtlar için enerji tüketimini snapshot'lardan hesaplama C# tarafında yapılacak
 -- JSON_VALUE SQL Server 2016+ gerektirir, bu yüzden migration script'te kaldırıldı

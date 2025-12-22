@@ -21,7 +21,10 @@ export default function DashboardHeader({
   colorSettings,
   onMobileMenuToggle,
   isMobileMenuOpen,
-  sidebarWidth = '4.5rem'
+  sidebarWidth = '4.5rem',
+  isXmasMode = false,
+  onToggleXmas = null,
+  userRole = ''
 }) {
   const { theme, isLiquidGlass, isFluid, liquidGlassVariant } = useTheme();
   const isLiquidGlassSilver = isLiquidGlass && liquidGlassVariant === 'silver';
@@ -129,6 +132,20 @@ export default function DashboardHeader({
           <div className="text-sm font-mono" style={{ color: isLiquidGlassSilver ? 'black' : (isFluid ? 'white' : darkMode ? undefined : colorSettings.text) }}>
             {currentTime}
           </div>
+          
+          {userRole === 'admin' && onToggleXmas && (
+            <button
+              onClick={onToggleXmas}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                isXmasMode
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-600'
+              }`}
+              title={isXmasMode ? 'Yılbaşı modu açık' : 'Yılbaşı modu kapalı'}
+            >
+              🎄 Xmas {isXmasMode ? 'On' : 'Off'}
+            </button>
+          )}
           
           <button
             onClick={() => setShowCardModal(true)}

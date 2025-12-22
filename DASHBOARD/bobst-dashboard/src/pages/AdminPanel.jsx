@@ -58,6 +58,7 @@ const AdminPanel = () => {
     canCreateUsers: false,
     canDeleteUsers: false,
     canManageRoles: false,
+    canUpdateWastageAfterQualityControl: false,
     allowedSections: [...BASE_ALLOWED_SECTION_KEYS],
   });
   const [roleFormError, setRoleFormError] = useState("");
@@ -228,6 +229,7 @@ const AdminPanel = () => {
       canCreateUsers: false,
       canDeleteUsers: false,
       canManageRoles: false,
+      canUpdateWastageAfterQualityControl: false,
       allowedSections: [...defaultSections],
     });
     setEditingRoleId(null);
@@ -418,6 +420,7 @@ const AdminPanel = () => {
       canCreateUsers: Boolean(role.canCreateUsers),
       canDeleteUsers: Boolean(role.canDeleteUsers),
       canManageRoles: Boolean(role.canManageRoles),
+      canUpdateWastageAfterQualityControl: Boolean(role.canUpdateWastageAfterQualityControl),
       allowedSections: allowed.filter((section) => availableSections.includes(section)),
     });
     setRoleFormError("");
@@ -459,6 +462,7 @@ const AdminPanel = () => {
         canCreateUsers: roleForm.canCreateUsers,
         canDeleteUsers: roleForm.canDeleteUsers,
         canManageRoles: roleForm.canManageRoles,
+        canUpdateWastageAfterQualityControl: roleForm.canUpdateWastageAfterQualityControl,
         allowedSections: sanitizedSections,
       };
 
@@ -1243,6 +1247,20 @@ const AdminPanel = () => {
                         />
                         Rol tanımlarını yönetebilir
                       </label>
+                      <label className="inline-flex items-center gap-2 text-gray-700 dark:text-gray-200 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={roleForm.canUpdateWastageAfterQualityControl}
+                          onChange={(e) =>
+                            setRoleForm((prev) => ({
+                              ...prev,
+                              canUpdateWastageAfterQualityControl: e.target.checked,
+                            }))
+                          }
+                          className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                        />
+                        Kalite kontrol sonrası fire girişi yapabilir
+                      </label>
                     </div>
                   </div>
                 </div>
@@ -1325,6 +1343,7 @@ const AdminPanel = () => {
                           <li>{role.canCreateUsers ? "• Kullanıcı oluşturabilir" : "• Kullanıcı oluşturamaz"}</li>
                           <li>{role.canDeleteUsers ? "• Kullanıcı silebilir" : "• Kullanıcı silemez"}</li>
                           <li>{role.canManageRoles ? "• Rol tanımlarını yönetebilir" : "• Rol tanımlarını yönetemez"}</li>
+                          <li>{role.canUpdateWastageAfterQualityControl ? "• Kalite kontrol sonrası fire girişi yapabilir" : "• Kalite kontrol sonrası fire girişi yapamaz"}</li>
                         </ul>
                       </div>
                       <div className="text-sm text-gray-700 dark:text-gray-300 space-y-1">

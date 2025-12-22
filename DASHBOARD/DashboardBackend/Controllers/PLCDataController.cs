@@ -913,6 +913,260 @@ END";
             }
         }
 
+        /// <summary>
+        /// Son duruş kaydını getir (tanımsız mı kontrol et)
+        /// GET /api/plcdata/last-stoppage?machine=lemanic3_tracking
+        /// </summary>
+        [HttpGet("last-stoppage")]
+        public async Task<IActionResult> GetLastStoppage([FromQuery] string? machine = null)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(machine))
+                {
+                    return BadRequest(new { error = "machine parametresi gerekli" });
+                }
+
+                var machineInfo = await _dashboardContext.MachineLists
+                    .FirstOrDefaultAsync(m => m.TableName.ToLower() == machine.ToLower());
+                
+                if (machineInfo == null)
+                {
+                    return BadRequest(new { error = $"Makine bulunamadı: {machine}" });
+                }
+
+                var originalTableName = machineInfo.TableName;
+                var tableName = NormalizeTableName(originalTableName);
+                string databaseName;
+                
+                if (!string.IsNullOrEmpty(machineInfo.DatabaseName))
+                {
+                    databaseName = machineInfo.DatabaseName;
+                }
+                else
+                {
+                    var baseName = originalTableName.Replace("_tracking", "");
+                    if (char.IsDigit(baseName.LastOrDefault()))
+                    {
+                        var lastDigit = baseName.Last();
+                        databaseName = baseName.Substring(0, baseName.Length - 1) + "_" + lastDigit + "_tracking";
+                    }
+                    else
+                    {
+                        databaseName = baseName + "_tracking";
+                    }
+                }
+
+                var connectionString = _machineDatabaseService.GetConnectionString(databaseName);
+                if (string.IsNullOrEmpty(connectionString))
+                {
+                    return StatusCode(503, new { error = $"Makine veritabanı bağlantısı bulunamadı: {databaseName}" });
+                }
+
+                using (var conn = new SqlConnection(connectionString))
+                {
+                    await conn.OpenAsync();
+                    
+                    // En son tamamlanmış duruş kaydını bul (end_time null olmayan)
+                    var query = @"
+                        SELECT TOP 1 
+                            sr.id,
+                            sr.category_id,
+                            sr.reason_id,
+                            sr.start_time,
+                            sr.end_time,
+                            sc.display_name as category_display_name,
+                            sre.reason_name
+                        FROM stoppage_records sr
+                        LEFT JOIN stoppage_categories sc ON sr.category_id = sc.id
+                        LEFT JOIN stoppage_reasons sre ON sr.reason_id = sre.id
+                        WHERE sr.end_time IS NOT NULL
+                        ORDER BY sr.end_time DESC";
+
+                    using (var cmd = new SqlCommand(query, conn))
+                    {
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (await reader.ReadAsync())
+                            {
+                                // Kolon index'lerini al
+                                var idOrdinal = reader.GetOrdinal("id");
+                                var categoryIdOrdinal = reader.GetOrdinal("category_id");
+                                var reasonIdOrdinal = reader.GetOrdinal("reason_id");
+                                var startTimeOrdinal = reader.GetOrdinal("start_time");
+                                var endTimeOrdinal = reader.GetOrdinal("end_time");
+                                
+                                // NULL kontrolü ile değerleri oku
+                                var id = reader.IsDBNull(idOrdinal) ? 0 : reader.GetInt32(idOrdinal);
+                                var categoryId = reader.IsDBNull(categoryIdOrdinal) ? 0 : reader.GetInt32(categoryIdOrdinal);
+                                var reasonId = reader.IsDBNull(reasonIdOrdinal) ? 0 : reader.GetInt32(reasonIdOrdinal);
+                                var startTime = reader.IsDBNull(startTimeOrdinal) ? (DateTime?)null : reader.GetDateTime(startTimeOrdinal);
+                                var endTime = reader.IsDBNull(endTimeOrdinal) ? (DateTime?)null : reader.GetDateTime(endTimeOrdinal);
+                                
+                                // JOIN'den gelen değerler (NULL olabilir)
+                                string? categoryDisplayName = null;
+                                string? reasonName = null;
+                                
+                                try
+                                {
+                                    var categoryDisplayNameOrdinal = reader.GetOrdinal("category_display_name");
+                                    if (!reader.IsDBNull(categoryDisplayNameOrdinal))
+                                        categoryDisplayName = reader.GetString(categoryDisplayNameOrdinal);
+                                }
+                                catch { }
+                                
+                                try
+                                {
+                                    var reasonNameOrdinal = reader.GetOrdinal("reason_name");
+                                    if (!reader.IsDBNull(reasonNameOrdinal))
+                                        reasonName = reader.GetString(reasonNameOrdinal);
+                                }
+                                catch { }
+
+                                // Tanımsız kontrolü
+                                var undefinedCategoryTokens = new[] { "tanimsiz", "tanımsız" };
+                                var undefinedReasonTokens = new[] { "tanımsız", "tanimsiz" };
+                                
+                                var isUndefined = false;
+                                if (!string.IsNullOrEmpty(categoryDisplayName))
+                                {
+                                    isUndefined = undefinedCategoryTokens.Contains(categoryDisplayName.ToLowerInvariant());
+                                }
+                                if (!isUndefined && !string.IsNullOrEmpty(reasonName))
+                                {
+                                    isUndefined = undefinedReasonTokens.Contains(reasonName.ToLowerInvariant());
+                                }
+                                
+                                // Eğer category_id veya reason_id 0 ise ve tanımsız kontrolü yapılamadıysa, varsayılan olarak tanımsız kabul et
+                                if (!isUndefined && (categoryId == 0 || reasonId == 0))
+                                {
+                                    isUndefined = true;
+                                }
+
+                                return Ok(new
+                                {
+                                    success = true,
+                                    id = id,
+                                    categoryId = categoryId,
+                                    reasonId = reasonId,
+                                    startTime = startTime,
+                                    endTime = endTime,
+                                    categoryDisplayName = categoryDisplayName,
+                                    reasonName = reasonName,
+                                    isUndefined = isUndefined
+                                });
+                            }
+                        }
+                    }
+                }
+
+                return Ok(new { success = true, isUndefined = false, message = "Duruş kaydı bulunamadı" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Son duruş kaydını güncelle
+        /// PUT /api/plcdata/update-last-stoppage?machine=lemanic3_tracking
+        /// </summary>
+        [HttpPut("update-last-stoppage")]
+        public async Task<IActionResult> UpdateLastStoppage([FromQuery] string? machine = null, [FromBody] dynamic request = null)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(machine))
+                {
+                    return BadRequest(new { success = false, error = "machine parametresi gerekli" });
+                }
+
+                var requestDict = JsonSerializer.Deserialize<Dictionary<string, object>>(request?.ToString() ?? "{}");
+                var categoryId = requestDict != null ? GetIntFromRequest(requestDict, "categoryId") : 0;
+                var reasonId = requestDict != null ? GetIntFromRequest(requestDict, "reasonId") : 0;
+
+                if (categoryId == 0 || reasonId == 0)
+                {
+                    return BadRequest(new { success = false, error = "categoryId ve reasonId gerekli" });
+                }
+
+                var machineInfo = await _dashboardContext.MachineLists
+                    .FirstOrDefaultAsync(m => m.TableName.ToLower() == machine.ToLower());
+                
+                if (machineInfo == null)
+                {
+                    return BadRequest(new { success = false, error = $"Makine bulunamadı: {machine}" });
+                }
+
+                var originalTableName = machineInfo.TableName;
+                var tableName = NormalizeTableName(originalTableName);
+                string databaseName;
+                
+                if (!string.IsNullOrEmpty(machineInfo.DatabaseName))
+                {
+                    databaseName = machineInfo.DatabaseName;
+                }
+                else
+                {
+                    var baseName = originalTableName.Replace("_tracking", "");
+                    if (char.IsDigit(baseName.LastOrDefault()))
+                    {
+                        var lastDigit = baseName.Last();
+                        databaseName = baseName.Substring(0, baseName.Length - 1) + "_" + lastDigit + "_tracking";
+                    }
+                    else
+                    {
+                        databaseName = baseName + "_tracking";
+                    }
+                }
+
+                var connectionString = _machineDatabaseService.GetConnectionString(databaseName);
+                if (string.IsNullOrEmpty(connectionString))
+                {
+                    return StatusCode(503, new { success = false, error = $"Makine veritabanı bağlantısı bulunamadı: {databaseName}" });
+                }
+
+                using (var conn = new SqlConnection(connectionString))
+                {
+                    await conn.OpenAsync();
+                    
+                    // En son tamamlanmış duruş kaydını bul ve güncelle
+                    var updateQuery = @"
+                        UPDATE TOP (1) stoppage_records
+                        SET category_id = @categoryId,
+                            reason_id = @reasonId
+                        WHERE id IN (
+                            SELECT TOP 1 id
+                            FROM stoppage_records
+                            WHERE end_time IS NOT NULL
+                            ORDER BY end_time DESC
+                        )";
+
+                    using (var cmd = new SqlCommand(updateQuery, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@categoryId", categoryId);
+                        cmd.Parameters.AddWithValue("@reasonId", reasonId);
+                        
+                        var rowsAffected = await cmd.ExecuteNonQueryAsync();
+                        
+                        if (rowsAffected > 0)
+                        {
+                            return Ok(new { success = true, message = "Son duruş kaydı güncellendi" });
+                        }
+                        else
+                        {
+                            return NotFound(new { success = false, error = "Güncellenecek duruş kaydı bulunamadı" });
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = ex.Message });
+            }
+        }
+
         private string NormalizeTableName(string? tableName)
         {
             if (string.IsNullOrWhiteSpace(tableName))

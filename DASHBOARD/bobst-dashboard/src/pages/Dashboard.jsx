@@ -34,6 +34,8 @@ import MaintenancePage from './MaintenancePage';
 import PeriodicSummariesPage from './PeriodicSummariesPage';
 import { usePushNotification } from '../contexts/PushNotificationContext';
 import { Bell, X, AlertCircle } from 'lucide-react';
+import XmasLights from '../components/Decor/XmasLights';
+import SnowfallOverlay from '../components/Decor/SnowfallOverlay';
 
 function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -65,6 +67,7 @@ function Dashboard() {
   const [savedLayout, setSavedLayout] = useState(null);
   const [hasLoadedPreferences, setHasLoadedPreferences] = useState(false);
   const [homeSubTab, setHomeSubTab] = useState('dashboard'); // 'dashboard' | 'periodicSummaries'
+  const [isXmasMode, setIsXmasMode] = useState(false);
 
   const { user } = useAuth();
   const { colorSettings } = useColor();
@@ -171,6 +174,38 @@ function Dashboard() {
     }
   };
 
+  const handleXmasToggle = () => {
+    const next = !isXmasMode;
+    setIsXmasMode(next);
+    api.post('/settings/xmas-mode', { enabled: next }).catch(err => {
+      console.warn('Xmas modu kaydedilemedi:', err);
+    });
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchXmasMode = () => {
+      api.get('/settings/xmas-mode')
+        .then(res => {
+          if (!cancelled) {
+            setIsXmasMode(Boolean(res.data?.enabled));
+          }
+        })
+        .catch(() => {
+          // sessiz geç
+        });
+    };
+
+    fetchXmasMode();
+    const intv = setInterval(fetchXmasMode, 15000); // 15sn'de bir global durumu çek
+
+    return () => {
+      cancelled = true;
+      clearInterval(intv);
+    };
+  }, []);
+
   const handleThemeChange = (newTheme) => {
     setLastLocalChange(Date.now());
 
@@ -217,6 +252,13 @@ function Dashboard() {
       }).catch(err => console.warn('Son makine kaydedilemedi:', err));
     }
   }, [userId, hookSelectedMachine?.id]);
+
+  // currentTab değiştiğinde homeSubTab'ı resetle
+  useEffect(() => {
+    if (currentTab !== 'home') {
+      setHomeSubTab('dashboard');
+    }
+  }, [currentTab]);
 
   const fetchPreferences = () => {
     if (!hasLoadedPreferences) {
@@ -299,7 +341,7 @@ function Dashboard() {
 
   return (
     <div
-      className={`min-h-screen ${
+      className={`dashboard-root min-h-screen ${
         isLiquidGlass
           ? 'liquid-glass text-white'
           : darkMode
@@ -353,6 +395,9 @@ function Dashboard() {
             colorSettings={colorSettings}
             isSidebarHovered={isSidebarHovered}
             sidebarWidth={sidebarWidth}
+            isXmasMode={isXmasMode}
+            onToggleXmas={handleXmasToggle}
+            userRole={user?.role || ''}
           />
         </div>
 
@@ -434,27 +479,74 @@ function Dashboard() {
           <>
             {/* Home sayfası içi tab'lar */}
             <div className="px-4 sm:px-6 pt-4">
-              <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
-                <button
-                  onClick={() => setHomeSubTab('dashboard')}
-                  className={`px-4 py-2 font-medium text-sm transition-colors ${
-                    homeSubTab === 'dashboard'
-                      ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                  }`}
-                >
-                  {currentLanguage === 'tr' ? 'Dashboard' : 'Dashboard'}
-                </button>
-                <button
-                  onClick={() => setHomeSubTab('periodicSummaries')}
-                  className={`px-4 py-2 font-medium text-sm transition-colors ${
-                    homeSubTab === 'periodicSummaries'
-                      ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                  }`}
-                >
-                  {currentLanguage === 'tr' ? 'Periyodik Özetler' : 'Periodic Summaries'}
-                </button>
+              <div 
+                className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-700 relative"
+                style={{
+                  position: 'sticky',
+                  top: 'calc(env(safe-area-inset-top, 0px) + 64px)',
+                  zIndex: 40,
+                  backgroundColor: isLiquidGlass 
+                    ? 'transparent' 
+                    : darkMode 
+                      ? '#0f172a' 
+                      : colorSettings.background,
+                  paddingTop: '1rem',
+                  paddingBottom: '0.5rem',
+                  marginTop: '-1rem',
+                  marginLeft: '-1rem',
+                  marginRight: '-1rem',
+                  paddingLeft: '1rem',
+                  paddingRight: '1rem',
+                  pointerEvents: 'none', // Scroll event'lerinin geçmesi için
+                }}
+              >
+                <div className="flex gap-2" style={{ pointerEvents: 'auto' }}>
+                  <button
+                    onClick={() => setHomeSubTab('dashboard')}
+                    className={`px-4 py-2 font-medium text-sm transition-colors ${
+                      homeSubTab === 'dashboard'
+                        ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`}
+                  >
+                    {currentLanguage === 'tr' ? 'Dashboard' : 'Dashboard'}
+                  </button>
+                  <button
+                    onClick={() => setHomeSubTab('periodicSummaries')}
+                    className={`px-4 py-2 font-medium text-sm transition-colors ${
+                      homeSubTab === 'periodicSummaries'
+                        ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`}
+                  >
+                    {currentLanguage === 'tr' ? 'Periyodik Özetler' : 'Periodic Summaries'}
+                  </button>
+                </div>
+
+                {/* Desktop Xmas Lights - tab bar'ın yanında, header ile birlikte sticky */}
+                {isXmasMode && (
+                  <div 
+                    className="hidden lg:block absolute"
+                    style={{
+                      left: '18%',
+                      top: '00px',
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    <div style={{ pointerEvents: 'auto' }}>
+                      <XmasLights height={180} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Mobile ve tablet: sekmelerin sağında küçük Xmas lights */}
+                {isXmasMode && (
+                  <div className="flex-1 flex justify-end lg:hidden" style={{ pointerEvents: 'auto' }}>
+                    <div className="pointer-events-auto">
+                      <XmasLights height={80} />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -563,6 +655,17 @@ function Dashboard() {
             currentLanguage={currentLanguage}
           />
         )}
+
+        {/* Xmas kar efekti - açıldığında tüm rollerde görünür */}
+        {isXmasMode && (
+          <SnowfallOverlay
+            count={80}
+            color="#ffffff"
+            zIndex={5000}
+            speed={[0.5, 2]}
+          />
+        )}
+
       </div>
     </div>
   );

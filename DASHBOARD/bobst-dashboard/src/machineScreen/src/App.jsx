@@ -1,4 +1,5 @@
-﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
+﻿import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, 
@@ -35,11 +36,13 @@ import { createMachineApi } from '../../utils/api';
 import { dashboardApi } from '../../utils/api';
 import { getTranslation } from '../../utils/translations';
 import { MachineScreenContext, useMachineScreen } from './context';
+import SnowfallOverlay from '../../components/Decor/SnowfallOverlay';
 import MaintenanceRequestModal from '../../components/Modals/MaintenanceRequestModal';
 import { useAuth } from '../../contexts/AuthContext';
 
 const UNDEFINED_CATEGORY_TOKENS = ['tanimsiz', 'tanımsız'];
 const UNDEFINED_REASON_TOKENS = ['tanımsız', 'tanimsiz'];
+
 
 const MachineScreenInner = ({ machineApi, machineTableName, machineName, language: languageProp }) => {
   const { language: languageFromContext = 'tr' } = useMachineScreen();
@@ -67,6 +70,33 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
   // Notification state
   const [notifications, setNotifications] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+
+  // Global Xmas modu (DashboardBackend SettingsController'dan)
+  const [isXmasMode, setIsXmasMode] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchXmasMode = () => {
+      dashboardApi.get('/settings/xmas-mode')
+        .then(res => {
+          if (!cancelled) {
+            setIsXmasMode(Boolean(res.data?.enabled));
+          }
+        })
+        .catch(() => {
+          // sessiz geç
+        });
+    };
+
+    fetchXmasMode();
+    const intv = setInterval(fetchXmasMode, 15000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intv);
+    };
+  }, []);
   
   // Notification fonksiyonları
   const addNotification = (type, message, duration = 5000) => {
@@ -152,6 +182,11 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
   const [undefinedStopIds, setUndefinedStopIds] = useState({ categoryId: null, reasonId: null });
   // Son gönderilen duruş sebebi değerlerini sakla (tekrar göndermeyi önlemek için)
   const lastSentStoppageReason = useRef({ categoryId: null, reasonId: null });
+  
+  // Son duruş kaydı kontrolü (tanımsız mı?)
+  const [lastStoppageUndefined, setLastStoppageUndefined] = useState(false);
+  const [lastStoppageId, setLastStoppageId] = useState(null);
+  const [canFixLastStoppage, setCanFixLastStoppage] = useState(true); // Makine tekrar durana kadar düzeltilebilir
   
   useEffect(() => {
     let isMounted = true;
@@ -603,6 +638,32 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
       return;
     }
     
+    // Eğer son duruş tanımsız ise ve düzeltilebilir durumdaysa, önce son duruş kaydını güncelle
+    if (lastStoppageUndefined && canFixLastStoppage && lastStoppageId) {
+      try {
+        console.log('🔄 Son tanımsız duruş kaydı güncelleniyor...');
+        const { data: updateData } = await machineApi.put('/plcdata/update-last-stoppage', {
+          stoppageId: lastStoppageId,
+          categoryId: selectedStopCategory,
+          reasonId: reasonId,
+          machine: machineTableName
+        });
+        
+        if (updateData?.success) {
+          console.log('✅ Son duruş kaydı güncellendi');
+          addNotification('success', 'Son duruş kaydı güncellendi!');
+          setLastStoppageUndefined(false);
+          setCanFixLastStoppage(false);
+          // Son duruş kaydını tekrar kontrol et
+          await checkLastStoppage();
+        } else {
+          console.warn('⚠️ Son duruş kaydı güncellenemedi:', updateData?.error);
+        }
+      } catch (error) {
+        console.error('❌ Son duruş kaydı güncelleme hatası:', error);
+      }
+    }
+    
     // PLCDataCollector'a sebep bilgilerini gönder
     // Her zaman gönder - kullanıcı değiştirmek istediğinde de güncellensin
     try {
@@ -625,6 +686,9 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
     }
     
     setShowConfirmation(false);
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = '';
+    }
     setShowStopReason(false);
     setSelectedCategory(null);
   };
@@ -665,11 +729,21 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
   };
 
   // İş sonu
-  const handleWorkEnd = () => {
+  const handleWorkEnd = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    console.log('İş Sonu butonuna tıklandı, handleWorkEnd çağrıldı');
     // İş emri yoksa iş sonu yapılamaz
     if (!currentOrder) {
       addNotification('error', 'Bir iş emri girmeden işi sonlandıramazsınız!');
       return;
+    }
+    console.log('showWorkEndConfirmation açılıyor');
+    // Body overflow'unu kontrol et
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = 'hidden';
     }
     setShowWorkEndConfirmation(true);
   };
@@ -740,6 +814,9 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
 
         if (data?.success) {
           console.log('✅ İş sonu raporu kaydedildi ve PLC reset sinyali gönderildi:', data);
+          if (typeof document !== 'undefined') {
+            document.body.style.overflow = '';
+          }
           setShowWorkEndConfirmation(false);
           setShowOrderInput(true);
         } else {
@@ -777,8 +854,11 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
         console.error('❌ Error response:', error?.response);
         console.error('❌ Error data:', error?.response?.data);
         const errorMessage = error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Bilinmeyen hata';
-        addNotification('error', 'İş sonu işlemi sırasında hata oluştu: ' + errorMessage);
+          addNotification('error', 'İş sonu işlemi sırasında hata oluştu: ' + errorMessage);
         // Hata durumunda da onay penceresini kapat
+        if (typeof document !== 'undefined') {
+          document.body.style.overflow = '';
+        }
         setShowWorkEndConfirmation(false);
       } finally {
         setIsEndingWork(false);
@@ -788,8 +868,17 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
 
   // İş sonu iptal
   const handleCancelWorkEnd = () => {
+    console.log('handleCancelWorkEnd çağrıldı');
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = '';
+    }
     setShowWorkEndConfirmation(false);
   };
+
+  // showWorkEndConfirmation state değişikliğini izle
+  useEffect(() => {
+    console.log('🔄 showWorkEndConfirmation state değişti:', showWorkEndConfirmation);
+  }, [showWorkEndConfirmation]);
 
   // Yeni iş emri onayı
   const handleConfirmNewOrder = async () => {
@@ -922,6 +1011,24 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
     };
   }, [machineStatus, machineApi]);
 
+  // Son duruş kaydını kontrol et (tanımsız mı?)
+  const checkLastStoppage = useCallback(async () => {
+    try {
+      const { data } = await machineApi.get('/plcdata/last-stoppage');
+      if (data?.success) {
+        setLastStoppageUndefined(data.isUndefined || false);
+        setLastStoppageId(data.id || null);
+      } else {
+        setLastStoppageUndefined(false);
+        setLastStoppageId(null);
+      }
+    } catch (error) {
+      console.warn('⚠️ Son duruş kaydı kontrol edilemedi:', error);
+      setLastStoppageUndefined(false);
+      setLastStoppageId(null);
+    }
+  }, [machineApi]);
+
   // Makine durumu değiştiğinde
   useEffect(() => {
     if (machineStatus === 'stopped' && !stopStartTime && !stopTimer) {
@@ -929,18 +1036,49 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
       startStopTimer();
       // Sadece duruyor state'ine yeni geçildiyse modal aç
       if (!hasShownStopReasonModalRef.current) {
+        if (typeof document !== 'undefined') {
+          document.body.style.overflow = 'hidden';
+        }
         setShowStopReason(true); // Duruş sebebi seçim ekranını aç
         hasShownStopReasonModalRef.current = true;
       }
       setShowDowntimeOverlay(true); // Duruş overlay'ini göster
+      
+      // Makine durduğunda, eğer önceki tanımsız duruş düzeltilmediyse artık düzeltilemez
+      if (lastStoppageUndefined && canFixLastStoppage) {
+        setCanFixLastStoppage(false);
+        setLastStoppageUndefined(false); // Artık düzeltilemez, uyarıyı kaldır
+      }
     } else if (machineStatus === 'running' && stopStartTime) {
       // Makine çalışmaya başladı, sayaç durdur
       stopStopTimer();
-      setShowStopReason(false);
+      // Sadece otomatik açılan modal'ı kapat, kullanıcı manuel açtıysa kapatma
+      if (hasShownStopReasonModalRef.current) {
+        if (typeof document !== 'undefined') {
+          document.body.style.overflow = '';
+        }
+        setShowStopReason(false);
+      }
       setShowDowntimeOverlay(false); // Duruş overlay'ini gizle
       hasShownStopReasonModalRef.current = false; // Reset - bir sonraki duruşta tekrar açılsın
+      
+      // Makine çalışmaya başladığında son duruş kaydını kontrol et
+      checkLastStoppage();
+      // Eğer tanımsız duruş varsa, düzeltilebilir olarak işaretle
+      if (lastStoppageUndefined) {
+        setCanFixLastStoppage(true);
+      }
     }
-  }, [machineStatus, stopStartTime, stopTimer]); // showStopReason dependency'den çıkarıldı
+  }, [machineStatus, stopStartTime, stopTimer, checkLastStoppage, lastStoppageUndefined, canFixLastStoppage]); // showStopReason dependency'den çıkarıldı
+
+  // Makine çalışırken periyodik olarak son duruş kaydını kontrol et
+  useEffect(() => {
+    if (machineStatus === 'running') {
+      checkLastStoppage();
+      const interval = setInterval(checkLastStoppage, 5000); // Her 5 saniyede bir kontrol et
+      return () => clearInterval(interval);
+    }
+  }, [machineStatus, checkLastStoppage]);
 
   // Sayfa yüklendiğinde duruş durumunu kontrol et ve timer başlat
   useEffect(() => {
@@ -1167,6 +1305,7 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
   // Makine çalışıyor ekranı
   if (machineStatus === 'running') {
     return (
+      <>
       <div className="app-container running">
 
         {/* Üst Bilgi Çubuğu */}
@@ -1457,17 +1596,29 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
           </button>
         )}
         <button 
-          className="primary-button"
-          onClick={() => setShowStopReason(true)}
-          disabled={machineStatus === 'running'}
+          className={`primary-button ${lastStoppageUndefined && canFixLastStoppage && machineStatus === 'running' ? 'blink-rainbow' : ''}`}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Duruş Sebebi butonuna tıklandı, showStopReason açılıyor');
+            hasShownStopReasonModalRef.current = false; // Manuel açıldığını işaretle
+            if (typeof document !== 'undefined') {
+              document.body.style.overflow = 'hidden';
+            }
+            setShowStopReason(true);
+          }}
+          disabled={machineStatus === 'running' && !(lastStoppageUndefined && canFixLastStoppage)}
         >
           <AlertTriangle size={18} />
           Duruş Sebebi
         </button>
         <button 
           className="danger-button"
-          onClick={handleWorkEnd}
-          disabled={machineStatus === 'running'}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleWorkEnd(e);
+          }}
         >
           <CheckCircle size={18} />
           İş Sonu
@@ -1575,6 +1726,16 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
           </AnimatePresence>
         </motion.button>
       </div>
+
+      {/* Global Xmas kar efekti (Dashboard'daki ile senkron) */}
+      {isXmasMode && (
+        <SnowfallOverlay
+          count={70}
+          color="#ffffff"
+          zIndex={4000}
+          speed={[0.5, 2]}
+        />
+      )}
 
       {/* Arıza Bildirimleri - Kullanıcının kabul ettiği bildirimler (Çalışıyor ekranı) */}
       {myMaintenanceRequests.length > 0 && (
@@ -1767,11 +1928,483 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
       )}
 
       </div>
+      
+      {/* Modallar - Portal ile app-container dışına */}
+      {showStopReason && createPortal(
+        <div 
+          className="stop-reason-modal"
+          style={{
+            zIndex: 2147483647,
+            position: 'fixed',
+            top: '0px',
+            left: '0px',
+            right: '0px',
+            bottom: '0px',
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            pointerEvents: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            margin: '0px',
+            boxSizing: 'border-box'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              if (typeof document !== 'undefined') {
+                document.body.style.overflow = '';
+              }
+              setShowStopReason(false);
+              setSelectedCategory(null);
+            }
+          }}
+        >
+          <div 
+            className="stop-reason-modal-content"
+            style={{
+              position: 'relative',
+              margin: '0px',
+              pointerEvents: 'auto',
+              backgroundColor: '#1e293b',
+              borderRadius: window.innerWidth <= 768 ? '0' : '20px',
+              padding: window.innerWidth <= 768 ? '0.75rem' : '2rem',
+              maxWidth: window.innerWidth <= 768 ? '100%' : '1400px',
+              width: window.innerWidth <= 768 ? '100%' : '90%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              border: window.innerWidth <= 768 ? 'none' : '1px solid rgba(148, 163, 184, 0.3)',
+              boxShadow: window.innerWidth <= 768 ? 'none' : '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+              boxSizing: 'border-box'
+            }}
+            className="no-scrollbar"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              rowGap: '0.75rem',
+              columnGap: '0.75rem',
+              marginBottom: '2rem',
+              paddingBottom: '1rem',
+              borderBottom: '1px solid rgba(148, 163, 184, 0.2)'
+            }}>
+              <div>
+                <h2 style={{ color: '#f8fafc', fontSize: '2rem', fontWeight: 700, marginBottom: '0.35rem' }}>
+                  Duruş Sebebi Seçin
+                </h2>
+              </div>
+              <button 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (typeof document !== 'undefined') {
+                    document.body.style.overflow = '';
+                  }
+                  setShowStopReason(false);
+                  setSelectedCategory(null);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '48px',
+                  height: '48px',
+                  backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '12px',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+                  e.target.style.transform = 'scale(1.05)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                  e.target.style.transform = 'scale(1)';
+                }}
+              >
+                <X size={24} color="#ef4444" />
+              </button>
+            </div>
+            <StopReasonCategories 
+              selectedCategory={selectedCategory}
+              setSelectedCategory={setSelectedCategory}
+              handleStopReason={handleStopReason}
+            />
+          </div>
+        </div>,
+        document.body
+      )}
+      
+      {showWorkEndConfirmation && createPortal(
+        <div 
+          style={{
+            zIndex: 2147483647,
+            position: 'fixed',
+            top: '0px',
+            left: '0px',
+            right: '0px',
+            bottom: '0px',
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            pointerEvents: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            margin: '0px',
+            boxSizing: 'border-box'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              handleCancelWorkEnd();
+            }
+          }}
+        >
+          <div 
+            style={{
+              position: 'relative',
+              margin: '0px',
+              pointerEvents: 'auto',
+              backgroundColor: '#1e293b',
+              borderRadius: '16px',
+              padding: '1.5rem',
+              maxWidth: '450px',
+              width: '100%',
+              maxHeight: '90vh',
+              border: '1px solid rgba(148, 163, 184, 0.3)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.9)',
+              textAlign: 'center',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              boxSizing: 'border-box'
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
+          >
+            <div style={{
+              width: '60px',
+              height: '60px',
+              backgroundColor: 'rgba(239, 68, 68, 0.2)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1rem auto',
+              border: '2px solid rgba(239, 68, 68, 0.3)',
+              flexShrink: 0
+            }}>
+              <CheckCircle size={30} color="#ef4444" />
+            </div>
+            <h2 style={{ 
+              color: '#f8fafc', 
+              fontSize: '1.4rem', 
+              fontWeight: 700, 
+              marginBottom: '0.75rem',
+              lineHeight: '1.3',
+              flex: '1'
+            }}>
+              İş Sonu Onayı
+            </h2>
+            <p style={{ 
+              color: '#cbd5e1', 
+              fontSize: '0.95rem', 
+              marginBottom: '1.5rem',
+              lineHeight: '1.4',
+              flex: '1'
+            }}>
+              Mevcut iş emrini sonlandırmak ve üretimi durdurmak istediğinizden emin misiniz?
+            </p>
+            <div style={{
+              display: 'flex',
+              gap: '0.75rem',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <button
+                style={{
+                  padding: '1rem 2rem',
+                  backgroundColor: 'rgba(51, 65, 85, 0.6)',
+                  border: '1px solid rgba(148, 163, 184, 0.3)',
+                  borderRadius: '12px',
+                  color: '#f8fafc',
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  minWidth: '120px'
+                }}
+                onClick={handleCancelWorkEnd}
+              >
+                İptal
+              </button>
+              <button
+                style={{
+                  padding: '1rem 2rem',
+                  backgroundColor: isEndingWork ? 'rgba(148, 163, 184, 0.6)' : 'rgba(239, 68, 68, 0.8)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '12px',
+                  color: '#ffffff',
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                  cursor: isEndingWork ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease',
+                  minWidth: '120px'
+                }}
+                onClick={handleConfirmWorkEnd}
+                disabled={isEndingWork}
+              >
+                {isEndingWork ? 'İş Sonu İşleniyor...' : 'İş Sonu'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Duruş Sebebi Modal'ı - Portal ile app-container dışına */}
+      {showStopReason && createPortal(
+        <div 
+          className="stop-reason-modal"
+          style={{
+            zIndex: 2147483647,
+            position: 'fixed',
+            top: '0px',
+            left: '0px',
+            right: '0px',
+            bottom: '0px',
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            pointerEvents: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            margin: '0px',
+            boxSizing: 'border-box'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              if (typeof document !== 'undefined') {
+                document.body.style.overflow = '';
+              }
+              setShowStopReason(false);
+              setSelectedCategory(null);
+            }
+          }}
+        >
+          <div 
+            className="stop-reason-modal-content"
+            style={{
+              position: 'relative',
+              margin: '0px',
+              pointerEvents: 'auto',
+              backgroundColor: '#1e293b',
+              borderRadius: window.innerWidth <= 768 ? '0' : '20px',
+              padding: window.innerWidth <= 768 ? '0.75rem' : '2rem',
+              maxWidth: window.innerWidth <= 768 ? '100%' : '1400px',
+              width: window.innerWidth <= 768 ? '100%' : '90%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              border: window.innerWidth <= 768 ? 'none' : '1px solid rgba(148, 163, 184, 0.3)',
+              boxShadow: window.innerWidth <= 768 ? 'none' : '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+              boxSizing: 'border-box'
+            }}
+            className="no-scrollbar"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              rowGap: '0.75rem',
+              columnGap: '0.75rem',
+              marginBottom: '2rem',
+              paddingBottom: '1rem',
+              borderBottom: '1px solid rgba(148, 163, 184, 0.2)'
+            }}>
+              <div>
+                <h2 style={{ color: '#f8fafc', fontSize: '2rem', fontWeight: 700, marginBottom: '0.35rem' }}>
+                  Duruş Sebebi Seçin
+                </h2>
+              </div>
+              <button 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (typeof document !== 'undefined') {
+                    document.body.style.overflow = '';
+                  }
+                  setShowStopReason(false);
+                  setSelectedCategory(null);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '48px',
+                  height: '48px',
+                  backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '12px',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+                  e.target.style.transform = 'scale(1.05)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                  e.target.style.transform = 'scale(1)';
+                }}
+              >
+                <X size={24} color="#ef4444" />
+              </button>
+            </div>
+            <StopReasonCategories 
+              selectedCategory={selectedCategory}
+              setSelectedCategory={setSelectedCategory}
+              handleStopReason={handleStopReason}
+            />
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Onay Modal'ı - Portal ile app-container dışına */}
+      {showConfirmation && createPortal(
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2147483647
+          }}
+          onClick={handleCancelStopReason}
+        >
+          <div 
+            style={{
+              backgroundColor: '#1e293b',
+              borderRadius: '16px',
+              padding: '1.5rem',
+              maxWidth: '450px',
+              width: '90%',
+              maxHeight: '80vh',
+              border: '1px solid rgba(148, 163, 184, 0.3)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              textAlign: 'center',
+              marginBottom: '1.5rem',
+              flex: '1'
+            }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 0.75rem'
+              }}>
+                <CheckCircle size={24} color="#3b82f6" />
+              </div>
+              <h2 style={{ 
+                color: '#f8fafc', 
+                fontSize: '1.25rem', 
+                fontWeight: 700,
+                marginBottom: '0.5rem',
+                lineHeight: '1.3'
+              }}>
+                Duruş Sebebi Onayı
+              </h2>
+              <p style={{ 
+                color: '#94a3b8', 
+                fontSize: '0.9rem',
+                lineHeight: '1.4',
+                margin: 0
+              }}>
+                <strong style={{ color: '#f8fafc' }}>{selectedReason}</strong> sebebini seçmeyi onaylıyor musunuz?
+              </p>
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              gap: '0.75rem',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <button
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: 'rgba(148, 163, 184, 0.2)',
+                  border: '1px solid rgba(148, 163, 184, 0.3)',
+                  borderRadius: '12px',
+                  color: '#cbd5e1',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  minWidth: '120px'
+                }}
+                onClick={handleCancelStopReason}
+              >
+                İptal
+              </button>
+              <button
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  borderRadius: '12px',
+                  color: '#ffffff',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  minWidth: '120px'
+                }}
+                onClick={handleConfirmStopReason}
+              >
+                Onayla
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+      </>
     );
   }
 
   // Makine durdu ekranı
   return (
+    <>
     <div className="app-container stopped">
 
       {/* Üst Bilgi Çubuğu */}
@@ -2215,17 +2848,29 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
           </button>
         )}
         <button 
-          className="primary-button"
-          onClick={() => setShowStopReason(true)}
-          disabled={machineStatus === 'running'}
+          className={`primary-button ${lastStoppageUndefined && canFixLastStoppage && machineStatus === 'running' ? 'blink-rainbow' : ''}`}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Duruş Sebebi butonuna tıklandı, showStopReason açılıyor');
+            hasShownStopReasonModalRef.current = false; // Manuel açıldığını işaretle
+            if (typeof document !== 'undefined') {
+              document.body.style.overflow = 'hidden';
+            }
+            setShowStopReason(true);
+          }}
+          disabled={machineStatus === 'running' && !(lastStoppageUndefined && canFixLastStoppage)}
         >
           <AlertTriangle size={18} />
           Duruş Sebebi
         </button>
         <button 
           className="danger-button"
-          onClick={handleWorkEnd}
-          disabled={machineStatus === 'running'}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleWorkEnd(e);
+          }}
         >
           <CheckCircle size={18} />
           İş Sonu
@@ -2335,52 +2980,55 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
       </div>
 
       {/* Paylaşımlı Duruş Bilgi Modalı */}
-
-      {/* Duruş Sebebi Modal'ı - DÜZELTİLMİŞ HALİ */}
-      {showStopReason && (
+      
+      {/* Duruş Sebebi Modal'ı - Portal ile app-container dışına */}
+      {showStopReason && createPortal(
         <div 
           className="stop-reason-modal"
-          style={window.innerWidth <= 768 ? {
-            // Mobil: CSS'te tanımlı, inline style minimal
+          style={{
+            zIndex: 2147483647,
             position: 'fixed',
-            zIndex: 99999
-          } : {
-            // PC: Normal modal
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            top: '0px',
+            left: '0px',
+            right: '0px',
+            bottom: '0px',
+            width: '100vw',
+            height: '100vh',
             backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            pointerEvents: 'auto',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 99999
+            padding: '1rem',
+            margin: '0px',
+            boxSizing: 'border-box'
           }}
-          onClick={() => {
-            setShowStopReason(false);
-            setSelectedCategory(null);
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              if (typeof document !== 'undefined') {
+                document.body.style.overflow = '';
+              }
+              setShowStopReason(false);
+              setSelectedCategory(null);
+            }
           }}
         >
           <div 
             className="stop-reason-modal-content"
-            style={window.innerWidth <= 768 ? {
-              // Mobil: CSS'te tanımlı, inline style minimal - genişlik sınırlaması yok
+            style={{
+              position: 'relative',
+              margin: '0px',
+              pointerEvents: 'auto',
               backgroundColor: '#1e293b',
+              borderRadius: window.innerWidth <= 768 ? '0' : '20px',
+              padding: window.innerWidth <= 768 ? '0.75rem' : '2rem',
+              maxWidth: window.innerWidth <= 768 ? '100%' : '1400px',
+              width: window.innerWidth <= 768 ? '100%' : '90%',
+              maxHeight: '90vh',
               overflowY: 'auto',
-              width: '100%',
-              maxWidth: '100%'
-            } : {
-              // PC: Normal modal içeriği
-              backgroundColor: '#1e293b',
-              borderRadius: '20px',
-              padding: '2rem',
-              maxWidth: '1400px',
-              width: '90%',
-              maxHeight: '85vh',
-              overflowY: 'auto',
-              border: '1px solid rgba(148, 163, 184, 0.3)',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)'
+              border: window.innerWidth <= 768 ? 'none' : '1px solid rgba(148, 163, 184, 0.3)',
+              boxShadow: window.innerWidth <= 768 ? 'none' : '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+              boxSizing: 'border-box'
             }}
             className="no-scrollbar"
             onClick={(e) => e.stopPropagation()}
@@ -2486,6 +3134,9 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
                     e.target.style.transform = 'scale(1)';
                   }}
                   onClick={() => {
+                    if (typeof document !== 'undefined') {
+                      document.body.style.overflow = '';
+                    }
                     setShowStopReason(false);
                     setSelectedCategory(null);
                     handleWorkEnd();
@@ -2516,12 +3167,20 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
                     e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
                     e.target.style.transform = 'scale(1)';
                   }}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('🔴 X butonuna tıklandı, modal kapatılıyor');
+                    if (typeof document !== 'undefined') {
+                      document.body.style.overflow = '';
+                    }
+                    console.log('🔴 setShowStopReason(false) çağrılıyor');
                     setShowStopReason(false);
                     setSelectedCategory(null);
+                    console.log('🔴 Modal kapatıldı');
                   }}
                 >
-                  <X size={24} />
+                  <X size={24} color="#ef4444" />
                 </button>
               </div>
             </div>
@@ -2533,11 +3192,14 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
               handleStopReason={handleStopReason}
             />
           </div>
-        </div>
+        </div>,
+        document.body
+      )},
+        document.body
       )}
 
-      {/* Onay Modal'ı */}
-      {showConfirmation && (
+      {/* Onay Modal'ı - Portal ile app-container dışına */}
+      {showConfirmation && createPortal(
         <div 
           style={{
             position: 'fixed',
@@ -2549,7 +3211,7 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 100000
+            zIndex: 2147483647
           }}
           onClick={handleCancelStopReason}
         >
@@ -2666,38 +3328,60 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* İş Sonu Onay Modal'ı */}
-      {showWorkEndConfirmation && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.9)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 999999
-        }}>
-          <div style={{
-            backgroundColor: '#1e293b',
-            borderRadius: '16px',
-            padding: '1.5rem',
-            maxWidth: '450px',
-            width: '90%',
-            maxHeight: '80vh',
-            border: '1px solid rgba(148, 163, 184, 0.3)',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.9)',
-            textAlign: 'center',
-            animation: 'scaleIn 0.3s ease',
-            overflow: 'hidden',
+      {/* İş Sonu Onay Modal'ı - app-container içinde (eski, kaldırılacak) */}
+      {false && showWorkEndConfirmation && (
+        <div 
+          style={{
+            zIndex: 2147483647,
+            position: 'fixed',
+            top: '0px',
+            left: '0px',
+            right: '0px',
+            bottom: '0px',
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            pointerEvents: 'auto',
             display: 'flex',
-            flexDirection: 'column'
-          }}>
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            margin: '0px',
+            boxSizing: 'border-box'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              handleCancelWorkEnd();
+            }
+          }}
+        >
+          <div 
+            style={{
+              position: 'relative',
+              margin: '0px',
+              pointerEvents: 'auto',
+              backgroundColor: '#1e293b',
+              borderRadius: '16px',
+              padding: '1.5rem',
+              maxWidth: '450px',
+              width: '100%',
+              maxHeight: '90vh',
+              border: '1px solid rgba(148, 163, 184, 0.3)',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.9)',
+              textAlign: 'center',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              boxSizing: 'border-box'
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
+          >
             {/* Icon */}
             <div style={{
               width: '60px',
@@ -3368,10 +4052,140 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
       )}
 
     </div>
+    
+    {/* Modallar - app-container dışında (stopped için) - KALDIRILDI */}
+    {/* Modal kaldırıldı - running durumundaki modal her iki durum için de çalışıyor */}
+    
+    {showWorkEndConfirmation && createPortal(
+      <div 
+        style={{
+          zIndex: 2147483647,
+          position: 'fixed',
+          top: '0px',
+          left: '0px',
+          right: '0px',
+          bottom: '0px',
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+          pointerEvents: 'auto',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem',
+          margin: '0px',
+          boxSizing: 'border-box'
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            handleCancelWorkEnd();
+          }
+        }}
+      >
+        <div 
+          style={{
+            position: 'relative',
+            margin: '0px',
+            pointerEvents: 'auto',
+            backgroundColor: '#1e293b',
+            borderRadius: '16px',
+            padding: '1.5rem',
+            maxWidth: '450px',
+            width: '100%',
+            maxHeight: '90vh',
+            border: '1px solid rgba(148, 163, 184, 0.3)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.9)',
+            textAlign: 'center',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            boxSizing: 'border-box'
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+        >
+          <div style={{
+            width: '60px',
+            height: '60px',
+            backgroundColor: 'rgba(239, 68, 68, 0.2)',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 1rem auto',
+            border: '2px solid rgba(239, 68, 68, 0.3)',
+            flexShrink: 0
+          }}>
+            <CheckCircle size={30} color="#ef4444" />
+          </div>
+          <h2 style={{ 
+            color: '#f8fafc', 
+            fontSize: '1.4rem', 
+            fontWeight: 700, 
+            marginBottom: '0.75rem',
+            lineHeight: '1.3',
+            flex: '1'
+          }}>
+            İş Sonu Onayı
+          </h2>
+          <p style={{ 
+            color: '#cbd5e1', 
+            fontSize: '0.95rem', 
+            marginBottom: '1.5rem',
+            lineHeight: '1.4',
+            flex: '1'
+          }}>
+            Mevcut iş emrini sonlandırmak ve üretimi durdurmak istediğinizden emin misiniz?
+          </p>
+          <div style={{
+            display: 'flex',
+            gap: '0.75rem',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <button
+              style={{
+                padding: '1rem 2rem',
+                backgroundColor: 'rgba(51, 65, 85, 0.6)',
+                border: '1px solid rgba(148, 163, 184, 0.3)',
+                borderRadius: '12px',
+                color: '#f8fafc',
+                fontSize: '1rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                minWidth: '120px'
+              }}
+              onClick={handleCancelWorkEnd}
+            >
+              İptal
+            </button>
+            <button
+              style={{
+                padding: '1rem 2rem',
+                backgroundColor: isEndingWork ? 'rgba(148, 163, 184, 0.6)' : 'rgba(239, 68, 68, 0.8)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '12px',
+                color: '#ffffff',
+                fontSize: '1rem',
+                fontWeight: 600,
+                cursor: isEndingWork ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease',
+                minWidth: '120px'
+              }}
+              onClick={handleConfirmWorkEnd}
+              disabled={isEndingWork}
+            >
+              {isEndingWork ? 'İş Sonu İşleniyor...' : 'İş Sonu'}
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+    </>
   );
-
-
-
 };
 
 const MachineScreenApp = ({ machineInfo, language = 'tr' }) => {

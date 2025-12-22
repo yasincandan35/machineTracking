@@ -14,7 +14,7 @@ export default function JobCard({ jobData, style }) {
   if (!jobData) {
     return (
       <div 
-        className="relative rounded shadow p-4 bg-white dark:bg-gray-800 dark:text-gray-100 w-full h-full hover:shadow-lg hover:scale-[1.01] transition-all duration-300 ease-in-out cursor-pointer flex flex-col justify-center"
+        className="relative rounded shadow p-4 bg-white dark:bg-gray-800 dark:text-gray-100 w-full h-full hover:shadow-lg hover:scale-[1.01] transition-all duration-300 ease-in-out flex flex-col justify-center"
         style={style}
       >
         <div className="absolute right-4 top-1/2 -translate-y-1/2 text-blue-500">
@@ -31,7 +31,7 @@ export default function JobCard({ jobData, style }) {
 
   return (
     <div 
-      className="relative rounded shadow p-4 bg-white dark:bg-gray-800 dark:text-gray-100 min-h-[140px] hover:shadow-lg hover:scale-[1.01] transition-all duration-300 ease-in-out cursor-pointer"
+      className="relative rounded shadow p-4 bg-white dark:bg-gray-800 dark:text-gray-100 min-h-[140px] hover:shadow-lg hover:scale-[1.01] transition-all duration-300 ease-in-out"
       style={style}
     >
       <div className="absolute right-4 top-1/2 -translate-y-1/2 text-blue-500">

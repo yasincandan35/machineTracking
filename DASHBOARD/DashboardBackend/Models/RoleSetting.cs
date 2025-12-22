@@ -38,6 +38,11 @@ namespace DashboardBackend.Models
         /// </summary>
         public bool CanManageRoles { get; set; } = false;
 
+        /// <summary>
+        /// Bu rol kalite kontrol sonrası fire girişi yapabilir mi?
+        /// </summary>
+        public bool CanUpdateWastageAfterQualityControl { get; set; } = false;
+
         [Column("AllowedSections")]
         public string? AllowedSectionsSerialized { get; set; }
 

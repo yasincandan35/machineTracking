@@ -201,6 +201,7 @@ namespace DashboardBackend.Controllers
                 CanCreateUsers = roleSetting.CanCreateUsers,
                 CanDeleteUsers = roleSetting.CanDeleteUsers,
                 CanManageRoles = roleSetting.CanManageRoles,
+                CanUpdateWastageAfterQualityControl = roleSetting.CanUpdateWastageAfterQualityControl,
                 AllowedSections = roleSetting.AllowedSections?.Distinct().ToList() ?? new List<string>()
             };
 
@@ -241,6 +242,7 @@ namespace DashboardBackend.Controllers
             role.CanCreateUsers = update.CanCreateUsers;
             role.CanDeleteUsers = update.CanDeleteUsers;
             role.CanManageRoles = update.CanManageRoles;
+            role.CanUpdateWastageAfterQualityControl = update.CanUpdateWastageAfterQualityControl;
 
             if (update.AllowedSections != null)
             {
@@ -339,6 +341,7 @@ namespace DashboardBackend.Controllers
                 CanCreateUsers = role.CanCreateUsers,
                 CanDeleteUsers = role.CanDeleteUsers,
                 CanManageRoles = role.CanManageRoles,
+                CanUpdateWastageAfterQualityControl = role.CanUpdateWastageAfterQualityControl,
                 AllowedSections = role.AllowedSections ?? new List<string>()
             };
 
@@ -367,6 +370,7 @@ namespace DashboardBackend.Controllers
             public bool CanCreateUsers { get; set; }
             public bool CanDeleteUsers { get; set; }
             public bool CanManageRoles { get; set; }
+            public bool CanUpdateWastageAfterQualityControl { get; set; }
             public List<string> AllowedSections { get; set; } = new();
         }
 
@@ -378,6 +382,7 @@ namespace DashboardBackend.Controllers
             public bool CanCreateUsers { get; set; }
             public bool CanDeleteUsers { get; set; }
             public bool CanManageRoles { get; set; }
+            public bool CanUpdateWastageAfterQualityControl { get; set; }
             public List<string>? AllowedSections { get; set; }
         }
     }

@@ -472,7 +472,7 @@
     gap: 0.15rem;
     padding: 0.15rem;
     height: calc(100vh - 135px);
-    overflow-y: auto;
+    overflow-y: hidden; /* Sayfa scroll olmasın, kartlar içinde scroll edilsin */
     overflow-x: hidden;
     align-items: stretch;
   }
@@ -714,6 +714,9 @@
   z-index: 12; /* Fluid canvas'tan üstte */
   pointer-events: auto; /* Dokunuşları al */
   flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* İçerik scroll edilebilir olsun */
 }
 
 .stoppage-content {
@@ -722,6 +725,8 @@
   gap: 0.6rem;
   align-items: start;
   height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .stoppage-chart {
@@ -1090,6 +1095,29 @@
   cursor: pointer !important;
 }
 
+/* Tanımsız duruş uyarısı için rainbow efektli buton */
+.primary-button.blink-rainbow {
+  animation: rainbow-gradient 3s linear infinite, rainbow-pulse 1.5s ease-in-out infinite;
+  color: white !important;
+  font-weight: 700 !important;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  position: relative;
+  z-index: 10;
+  transition: background 0.1s ease, box-shadow 0.1s ease;
+  will-change: background, box-shadow, transform;
+}
+
+.primary-button.blink-rainbow:hover {
+  animation: rainbow-gradient 3s linear infinite, rainbow-pulse 1.2s ease-in-out infinite;
+  transform: scale(1.1);
+  filter: brightness(1.2);
+}
+
+.primary-button.blink-rainbow:active {
+  transform: scale(1.05);
+}
+
 /* Modal Stilleri */
 .modal-overlay {
   position: fixed;
@@ -1416,6 +1444,83 @@
   100% {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+@keyframes pulse-warning {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+    box-shadow: 0 0 30px rgba(239, 68, 68, 0.9);
+  }
+}
+
+@keyframes rainbow-gradient {
+  0% {
+    background: hsl(0, 100%, 50%);
+    box-shadow: 0 0 30px hsla(0, 100%, 50%, 0.8);
+  }
+  8.33% {
+    background: hsl(30, 100%, 50%);
+    box-shadow: 0 0 30px hsla(30, 100%, 50%, 0.8);
+  }
+  16.66% {
+    background: hsl(60, 100%, 50%);
+    box-shadow: 0 0 30px hsla(60, 100%, 50%, 0.8);
+  }
+  25% {
+    background: hsl(90, 100%, 50%);
+    box-shadow: 0 0 30px hsla(90, 100%, 50%, 0.8);
+  }
+  33.33% {
+    background: hsl(120, 100%, 50%);
+    box-shadow: 0 0 30px hsla(120, 100%, 50%, 0.8);
+  }
+  41.66% {
+    background: hsl(150, 100%, 50%);
+    box-shadow: 0 0 30px hsla(150, 100%, 50%, 0.8);
+  }
+  50% {
+    background: hsl(180, 100%, 50%);
+    box-shadow: 0 0 30px hsla(180, 100%, 50%, 0.8);
+  }
+  58.33% {
+    background: hsl(210, 100%, 50%);
+    box-shadow: 0 0 30px hsla(210, 100%, 50%, 0.8);
+  }
+  66.66% {
+    background: hsl(240, 100%, 50%);
+    box-shadow: 0 0 30px hsla(240, 100%, 50%, 0.8);
+  }
+  75% {
+    background: hsl(270, 100%, 50%);
+    box-shadow: 0 0 30px hsla(270, 100%, 50%, 0.8);
+  }
+  83.33% {
+    background: hsl(300, 100%, 50%);
+    box-shadow: 0 0 30px hsla(300, 100%, 50%, 0.8);
+  }
+  91.66% {
+    background: hsl(330, 100%, 50%);
+    box-shadow: 0 0 30px hsla(330, 100%, 50%, 0.8);
+  }
+  100% {
+    background: hsl(360, 100%, 50%);
+    box-shadow: 0 0 30px hsla(360, 100%, 50%, 0.8);
+  }
+}
+
+@keyframes rainbow-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
   }
 }
 
