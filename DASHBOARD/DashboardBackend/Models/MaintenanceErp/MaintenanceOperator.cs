@@ -1,0 +1,18 @@
+using System;
+
+namespace DashboardBackend.Models.MaintenanceErp
+{
+    public class MaintenanceOperator
+    {
+        public int Id { get; set; }
+        public int MachineId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public int? ExternalUserId { get; set; }
+        public bool IsActive { get; set; } = true;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        public MaintenanceMachine? Machine { get; set; }
+    }
+}
+

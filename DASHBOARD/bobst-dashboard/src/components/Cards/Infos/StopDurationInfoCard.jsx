@@ -48,9 +48,6 @@ export default function StopDurationInfoCard({ value, totalValue, stopReason, st
             </p>
           )}
         </div>
-        <div>
-          <p className="text-xs sm:text-sm">{getTranslation('totalStoppage', currentLanguage)}: {formattedTotal}</p>
-        </div>
       </div>
     </div>
   );

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Settings, TrendingUp, Plus, X, RefreshCw } from 'lucide-react';
+import { Settings, TrendingUp, Plus, X, RefreshCw, PauseCircle } from 'lucide-react';
 import { getTranslation } from '../utils/translations';
 import { useTheme } from '../contexts/ThemeContext';
 import { createMachineApi } from '../utils/api';
+import StoppageAnalysis from '../components/Analysis/StoppageAnalysis';
 
 export default function AnalysisPage({ currentLanguage = 'tr', selectedMachine, colorSettings, liveData }) {
   const { theme, isLiquidGlass, isFluid } = useTheme();
@@ -13,7 +14,7 @@ export default function AnalysisPage({ currentLanguage = 'tr', selectedMachine, 
   const [updateInterval, setUpdateInterval] = useState(5); // Güncelleme sıklığı (saniye)
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [analysisMode, setAnalysisMode] = useState('database'); // 'database' veya 'liveStream'
+  const [analysisMode, setAnalysisMode] = useState('stoppageAnalysis'); // 'stoppageAnalysis', 'database' veya 'liveStream'
   const [showSettings, setShowSettings] = useState(false);
   const [normalize, setNormalize] = useState(false); // Normalize mod (0-100% aralığı)
   const [selectedMetrics, setSelectedMetrics] = useState([]); // Seçilen metrikler (default: boş)
@@ -547,6 +548,18 @@ export default function AnalysisPage({ currentLanguage = 'tr', selectedMachine, 
         <div className="flex gap-2 mb-4 border-b border-gray-200 dark:border-gray-700">
           <button
             onClick={() => {
+              setAnalysisMode('stoppageAnalysis');
+            }}
+            className={`px-6 py-3 font-semibold transition-all ${
+              analysisMode === 'stoppageAnalysis'
+                ? 'border-b-2 border-green-500 text-green-600 dark:text-green-400'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+            }`}
+          >
+            ⏸️ Duruş Analizi
+          </button>
+          <button
+            onClick={() => {
               setAnalysisMode('database');
               setChartData([]);
               setBrushIndexes({ start: 0, end: null });
@@ -576,13 +589,23 @@ export default function AnalysisPage({ currentLanguage = 'tr', selectedMachine, 
         </div>
 
           <div className="flex items-center gap-3">
+            {analysisMode === 'stoppageAnalysis' ? (
+              <PauseCircle size={32} className="text-green-500" />
+            ) : (
             <TrendingUp size={32} className="text-blue-500" />
+            )}
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {analysisMode === 'database' ? 'Veritabanı Analizi' : 'Canlı Veri Akışı'}
+              {analysisMode === 'stoppageAnalysis' 
+                ? 'Duruş Analizi' 
+                : analysisMode === 'database' 
+                  ? 'Veritabanı Analizi' 
+                  : 'Canlı Veri Akışı'}
               </h1>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-              {analysisMode === 'database' 
+              {analysisMode === 'stoppageAnalysis'
+                ? `Duruş kayıtlarını analiz edin - Makine: ${selectedMachine?.name || 'Seçiniz'}`
+                : analysisMode === 'database' 
                 ? `Geçmiş veri analizi - Makine: ${selectedMachine?.name || 'Seçiniz'}` 
                 : `Gerçek zamanlı izleme (Binance tarzı) - Makine: ${selectedMachine?.name || 'Seçiniz'}`}
               </p>
@@ -590,7 +613,13 @@ export default function AnalysisPage({ currentLanguage = 'tr', selectedMachine, 
             </div>
           </div>
 
-      {/* Kontroller - Moda göre */}
+      {/* Duruş Analizi İçeriği */}
+      {analysisMode === 'stoppageAnalysis' && (
+        <StoppageAnalysis selectedMachine={selectedMachine} currentLanguage={currentLanguage} />
+      )}
+
+      {/* Kontroller - Moda göre (Sadece database ve liveStream modlarında) */}
+      {(analysisMode === 'database' || analysisMode === 'liveStream') && (
       <div className={cardClass}>
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3 flex-wrap">
@@ -721,9 +750,10 @@ export default function AnalysisPage({ currentLanguage = 'tr', selectedMachine, 
           )}
         </div>
       </div>
+      )}
 
       {/* Grafik Ayarları Paneli */}
-      {showSettings && (
+      {(analysisMode === 'database' || analysisMode === 'liveStream') && showSettings && (
         <div className={cardClass}>
           <h2 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">Grafik Seçimi ve Ayarları</h2>
           
@@ -928,7 +958,9 @@ export default function AnalysisPage({ currentLanguage = 'tr', selectedMachine, 
         </div>
       )}
 
-      {/* Makine seçilmemişse uyarı */}
+      {/* Makine seçilmemişse uyarı (Sadece database ve liveStream modlarında) */}
+      {(analysisMode === 'database' || analysisMode === 'liveStream') && (
+        <>
       {(!selectedMachine || selectedMachine.id === -1) ? (
         <div className={`${cardClass} text-center py-20 text-gray-500 dark:text-gray-400`}>
           <TrendingUp size={48} className="mx-auto mb-4 opacity-50" />
@@ -1109,6 +1141,8 @@ export default function AnalysisPage({ currentLanguage = 'tr', selectedMachine, 
               </>
             )}
           </div>
+          </>
+          )}
         </>
       )}
     </div>

@@ -14,6 +14,9 @@ const SECTION_OPTIONS = [
   { key: "add", label: "Kart Ekle" },
   { key: "profile", label: "Profil" },
   { key: "jobPassport", label: "İş Pasaportu" },
+  { key: "maintenanceManual", label: "Bakım Manuel" },
+  { key: "maintenanceReports", label: "Bakım Raporları" },
+  { key: "maintenanceAdmin", label: "Bakım Yönetimi" },
   { key: "admin", label: "Yönetim Paneli" },
   { key: "database", label: "Veritabanı" },
   { key: "shifts", label: "Vardiya Yönetimi" },
@@ -27,6 +30,8 @@ const TECHNICAL_SECTION_KEYS = [...BASE_ALLOWED_SECTION_KEYS, "database", "shift
 const QUALITY_SECTION_KEYS = [...BASE_ALLOWED_SECTION_KEYS, "temperatureHumidity"];
 const ADMIN_SECTION_KEYS = SECTION_OPTIONS.map(section => section.key);
 const MACHINE_SECTION_KEYS = ["machineScreen"];
+const MAINTENANCE_STAFF_SECTION_KEYS = ["maintenanceManual", "profile"];
+const MAINTENANCE_MANAGER_SECTION_KEYS = ["maintenanceManual", "maintenanceReports", "maintenanceAdmin", "profile"];
 
 const getSectionLabel = (key) => SECTION_OPTIONS.find((section) => section.key === key)?.label || key;
 
@@ -121,6 +126,8 @@ const AdminPanel = () => {
       { id: -6, name: "qualityengineer", displayName: "Kalite Mühendisi", tokenLifetimeMinutes: 720, allowedSections: [...QUALITY_SECTION_KEYS] },
       { id: -7, name: "admin", displayName: "Admin", tokenLifetimeMinutes: 1440, allowedSections: [...ADMIN_SECTION_KEYS] },
       { id: -8, name: "machine", displayName: "Makine", tokenLifetimeMinutes: 43200, allowedSections: [...MACHINE_SECTION_KEYS] },
+      { id: -9, name: "maintenanceStaff", displayName: "Bakım Personeli", tokenLifetimeMinutes: 480, allowedSections: [...MAINTENANCE_STAFF_SECTION_KEYS] },
+      { id: -10, name: "maintenanceManager", displayName: "Bakım Müdürü/Mühendisi", tokenLifetimeMinutes: 720, allowedSections: [...MAINTENANCE_MANAGER_SECTION_KEYS] },
     ],
     []
   );
@@ -287,7 +294,12 @@ const AdminPanel = () => {
           allowedSections: allowed,
         };
       });
-      setRoles(fetchedRoles);
+      // Eksik kalan varsayılan rolleri de ekle (özellikle bakım rolleri)
+      const merged = [
+        ...fetchedRoles,
+        ...fallbackRoleOptions.filter((fallback) => !fetchedRoles.some((r) => r.name === fallback.name)),
+      ];
+      setRoles(merged);
     } catch (err) {
       console.error("Rol listesi alınamadı:", err);
       setRolesError("Roller yüklenirken hata oluştu.");
@@ -300,7 +312,8 @@ const AdminPanel = () => {
     try {
       const response = await api.get("/rolesettings/sections");
       if (Array.isArray(response.data) && response.data.length > 0) {
-        setAvailableSections([...new Set(response.data)]);
+        const merged = [...new Set([...response.data, ...SECTION_OPTIONS.map((section) => section.key)])];
+        setAvailableSections(merged);
       }
     } catch (err) {
       console.error("Sekme listesi alınamadı:", err);

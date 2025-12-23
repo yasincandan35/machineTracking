@@ -69,6 +69,10 @@ builder.Services.AddHttpClient(); // HttpClientFactory için
 builder.Services.AddDbContext<DashboardDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// Maintenance ERP DB
+builder.Services.AddDbContext<MaintenanceErpDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("MaintenanceErpConnection")));
+
 // SensorDB Context - Artık makine bazlı dinamik olarak oluşturulacak
 // Factory pattern ile MachineDatabaseService üzerinden oluşturuluyor
 

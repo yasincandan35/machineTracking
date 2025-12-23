@@ -52,6 +52,7 @@ const Sidebar = ({ current, onChange = () => {}, isHovered, setIsHovered, backgr
     { key: "add", icon: Plus, label: "add", action: () => onChange("add") },
     { key: "profile", icon: User, label: "profile", action: () => onChange("profile") },
     { key: "jobPassport", icon: FileText, label: "jobPassport", action: () => onChange("jobPassport") },
+    { key: "maintenanceManual", icon: Wrench, label: "maintenanceManual", action: () => onChange("maintenanceManual") },
     { key: "maintenance", icon: Wrench, label: "maintenance", action: () => onChange("maintenance") },
           { key: "admin", icon: Shield, label: "adminPanel", action: () => onChange("admin") },
           { key: "database", icon: Database, label: "database", action: () => onChange("database") },

@@ -31,6 +31,7 @@ import JobPassportPage from './JobPassportPage';
 import AnalysisPage from './AnalysisPage';
 import TemperatureHumidityPage from './TemperatureHumidityPage';
 import MaintenancePage from './MaintenancePage';
+import MaintenanceManualPage from './MaintenanceManualPage';
 import PeriodicSummariesPage from './PeriodicSummariesPage';
 import { usePushNotification } from '../contexts/PushNotificationContext';
 import { Bell, X, AlertCircle } from 'lucide-react';
@@ -633,6 +634,7 @@ function Dashboard() {
         {currentTab === 'reports' && <ReportsPage darkMode={darkMode} currentLanguage={currentLanguage} selectedMachine={hookSelectedMachine} />}
         {currentTab === 'temperatureHumidity' && <TemperatureHumidityPage />}
         {currentTab === 'maintenance' && <MaintenancePage currentLanguage={currentLanguage} darkMode={darkMode} />}
+        {currentTab === 'maintenanceManual' && <MaintenanceManualPage currentLanguage={currentLanguage} darkMode={darkMode} />}
         {currentTab === 'database' && <DatabaseAdmin />}
         {currentTab === 'admin' && <AdminPanel />}
         {currentTab === 'shifts' && <ShiftManagement darkMode={darkMode} selectedMachine={hookSelectedMachine} currentLanguage={currentLanguage} />}

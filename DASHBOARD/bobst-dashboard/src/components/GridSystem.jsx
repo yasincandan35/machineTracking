@@ -215,7 +215,7 @@ export default function GridSystem({
       style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} 
       currentLanguage={currentLanguage} 
     />,
-    oeeGauge: () => <OEEGauge darkMode={darkMode} colorSettings={colorSettings} liveData={liveData} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} selectedMachine={selectedMachine} />,
+    oeeGauge: () => <OEEGauge darkMode={darkMode} colorSettings={colorSettings} liveData={liveData} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} />,
     stoppageChart: () => <StoppageChart isDark={darkMode} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} selectedMachine={selectedMachine} />,
     
     // Periyodik Özet Kartları
