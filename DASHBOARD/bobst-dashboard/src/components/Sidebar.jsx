@@ -38,8 +38,20 @@ const Sidebar = ({ current, onChange = () => {}, isHovered, setIsHovered, backgr
   };
 
   const allowedSections = user?.roleSettings?.allowedSections;
-  const isSectionAllowed = (sectionKey) =>
-    !allowedSections || allowedSections.length === 0 || allowedSections.includes(sectionKey);
+  const isSectionAllowed = (sectionKey) => {
+    if (!allowedSections || allowedSections.length === 0) return true;
+    if (allowedSections.includes(sectionKey)) return true;
+    
+    // Özel durum: maintenanceManual için alt sekmelerden biri seçiliyse ana sekme de göster
+    if (sectionKey === "maintenanceManual") {
+      return allowedSections.some(section => 
+        section === "maintenanceManual" || 
+        section.startsWith("maintenanceManual.")
+      );
+    }
+    
+    return false;
+  };
 
   const menuItems = [
     { key: "home", icon: Home, label: "home", action: () => onChange("home") },

@@ -87,8 +87,17 @@ function Dashboard() {
   }, [allowedSections]);
 
   const handleTabChange = (newTab) => {
-    if (allowedSections && allowedSections.length > 0 && !allowedSections.includes(newTab)) {
-      return;
+    if (allowedSections && allowedSections.length > 0) {
+      // Özel durum: maintenanceManual için alt sekmelerden biri seçiliyse ana sekme de açılabilir
+      if (newTab === "maintenanceManual") {
+        const hasMaintenanceManual = allowedSections.includes("maintenanceManual") || 
+          allowedSections.some(section => section.startsWith("maintenanceManual."));
+        if (!hasMaintenanceManual) {
+          return;
+        }
+      } else if (!allowedSections.includes(newTab)) {
+        return;
+      }
     }
     setCurrentTab(newTab);
     setSearchParams({ tab: newTab });
@@ -102,20 +111,36 @@ function Dashboard() {
   }, [user?.role, navigate]);
 
   useEffect(() => {
-    if (!allowedSections || allowedSections.length === 0 || allowedSections.includes(urlTab)) {
+    if (!allowedSections || allowedSections.length === 0) {
       setCurrentTab(urlTab);
     } else {
-      const fallback = defaultTab;
-      setCurrentTab(fallback);
-      setSearchParams({ tab: fallback });
+      // Özel durum: maintenanceManual için alt sekmelerden biri seçiliyse ana sekme de açılabilir
+      const isMaintenanceManualAllowed = urlTab === "maintenanceManual" && 
+        (allowedSections.includes("maintenanceManual") || 
+         allowedSections.some(section => section.startsWith("maintenanceManual.")));
+      
+      if (allowedSections.includes(urlTab) || isMaintenanceManualAllowed) {
+        setCurrentTab(urlTab);
+      } else {
+        const fallback = defaultTab;
+        setCurrentTab(fallback);
+        setSearchParams({ tab: fallback });
+      }
     }
   }, [urlTab, allowedSections, defaultTab, setSearchParams]);
 
   useEffect(() => {
-    if (allowedSections && allowedSections.length > 0 && !allowedSections.includes(currentTab)) {
-      const fallback = defaultTab;
-      setCurrentTab(fallback);
-      setSearchParams({ tab: fallback });
+    if (allowedSections && allowedSections.length > 0) {
+      // Özel durum: maintenanceManual için alt sekmelerden biri seçiliyse ana sekme de açılabilir
+      const isMaintenanceManualAllowed = currentTab === "maintenanceManual" && 
+        (allowedSections.includes("maintenanceManual") || 
+         allowedSections.some(section => section.startsWith("maintenanceManual.")));
+      
+      if (!allowedSections.includes(currentTab) && !isMaintenanceManualAllowed) {
+        const fallback = defaultTab;
+        setCurrentTab(fallback);
+        setSearchParams({ tab: fallback });
+      }
     }
   }, [allowedSections, currentTab, defaultTab, setSearchParams]);
 
@@ -498,7 +523,7 @@ function Dashboard() {
                   marginRight: '-1rem',
                   paddingLeft: '1rem',
                   paddingRight: '1rem',
-                  pointerEvents: 'none', // Scroll event'lerinin geçmesi için
+md                  pointerEvents: 'none', // Scroll event'lerinin geçmesi için
                 }}
               >
                 <div className="flex gap-2" style={{ pointerEvents: 'auto' }}>

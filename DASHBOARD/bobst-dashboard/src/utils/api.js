@@ -17,6 +17,7 @@ const SENSOR_API_URL = isProduction
 // 🆕 DashboardAPI - Kullanıcı, Makina Listesi, Auth
 export const dashboardApi = axios.create({
   baseURL: DASHBOARD_API_URL,
+  timeout: 10000, // 10 saniye timeout
   headers: {
     "Content-Type": "application/json",
   },
@@ -33,11 +34,12 @@ dashboardApi.interceptors.request.use((config) => {
 
 // DashboardAPI response interceptor - 401 durumunda logout
 dashboardApi.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    return response;
+  },
   (error) => {
     if (error.response?.status === 401) {
       // Token geçersiz veya süresi dolmuş
-      console.warn("🔒 Token süresi doldu, oturum kapatılıyor...");
       localStorage.clear();
       sessionStorage.clear();
       window.location.href = "/login";

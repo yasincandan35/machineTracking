@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { api } from "../utils/api";
 import { useAuth } from "../contexts/AuthContext";
-import { Key, Eye, EyeOff, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Key, Eye, EyeOff, ArrowUp, ArrowDown, ArrowUpDown, ChevronRight, ChevronDown } from "lucide-react";
 
 const SECTION_OPTIONS = [
   { key: "home", label: "Ana Sayfa" },
@@ -15,6 +15,9 @@ const SECTION_OPTIONS = [
   { key: "profile", label: "Profil" },
   { key: "jobPassport", label: "İş Pasaportu" },
   { key: "maintenanceManual", label: "Bakım Manuel" },
+  { key: "maintenanceManual.record", label: "Bakım Manuel - Kayıtlar" },
+  { key: "maintenanceManual.reports", label: "Bakım Manuel - Raporlar" },
+  { key: "maintenanceManual.admin", label: "Bakım Manuel - Yönetim" },
   { key: "maintenanceReports", label: "Bakım Raporları" },
   { key: "maintenanceAdmin", label: "Bakım Yönetimi" },
   { key: "admin", label: "Yönetim Paneli" },
@@ -34,6 +37,30 @@ const MAINTENANCE_STAFF_SECTION_KEYS = ["maintenanceManual", "profile"];
 const MAINTENANCE_MANAGER_SECTION_KEYS = ["maintenanceManual", "maintenanceReports", "maintenanceAdmin", "profile"];
 
 const getSectionLabel = (key) => SECTION_OPTIONS.find((section) => section.key === key)?.label || key;
+
+// MaintenanceManual checkbox component - indeterminate state için
+const MaintenanceManualCheckbox = ({ state, onToggle }) => {
+  const checkboxRef = useRef(null);
+  
+  useEffect(() => {
+    if (checkboxRef.current) {
+      checkboxRef.current.checked = state === "checked";
+      checkboxRef.current.indeterminate = state === "indeterminate";
+    }
+  }, [state]);
+  
+  return (
+    <label className="inline-flex items-center gap-2 text-gray-700 dark:text-gray-200 text-sm flex-1 cursor-pointer">
+      <input
+        ref={checkboxRef}
+        type="checkbox"
+        onChange={onToggle}
+        className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+      />
+      <span className="font-medium">Bakım Manuel</span>
+    </label>
+  );
+};
 
 const AdminPanel = () => {
   const [users, setUsers] = useState([]);
@@ -70,6 +97,8 @@ const AdminPanel = () => {
   const [roleFormSuccess, setRoleFormSuccess] = useState("");
   const [editingRoleId, setEditingRoleId] = useState(null);
   const [availableSections, setAvailableSections] = useState(SECTION_OPTIONS.map((section) => section.key));
+  const [expandedSections, setExpandedSections] = useState(new Set()); // Açık olan tree view'lar
+  
   const sectionDisplayList = useMemo(() => {
     const known = SECTION_OPTIONS.filter((section) => availableSections.includes(section.key));
     const unknown = availableSections
@@ -77,6 +106,81 @@ const AdminPanel = () => {
       .map((key) => ({ key, label: key }));
     return [...known, ...unknown];
   }, [availableSections]);
+  
+  // MaintenanceManual alt sekmeleri
+  const maintenanceManualSubSections = useMemo(() => {
+    return sectionDisplayList.filter(s => s.key.startsWith("maintenanceManual."));
+  }, [sectionDisplayList]);
+  
+  // MaintenanceManual ana checkbox durumunu hesapla (checked, unchecked, indeterminate)
+  const getMaintenanceManualState = useCallback(() => {
+    const hasMain = roleForm.allowedSections.includes("maintenanceManual");
+    const subSections = maintenanceManualSubSections.map(s => s.key);
+    const checkedSubs = subSections.filter(key => roleForm.allowedSections.includes(key));
+    
+    if (hasMain && checkedSubs.length === subSections.length) {
+      return "checked"; // Tümü seçili
+    } else if (checkedSubs.length > 0) {
+      return "indeterminate"; // Bazıları seçili
+    } else {
+      return "unchecked"; // Hiçbiri seçili değil
+    }
+  }, [roleForm.allowedSections, maintenanceManualSubSections]);
+  
+  // MaintenanceManual ana checkbox'ına tıklanınca
+  const handleMaintenanceManualToggle = useCallback(() => {
+    const state = getMaintenanceManualState();
+    const subSections = maintenanceManualSubSections.map(s => s.key);
+    
+    if (state === "checked") {
+      // Tümünü kaldır
+      setRoleForm(prev => ({
+        ...prev,
+        allowedSections: prev.allowedSections.filter(
+          key => key !== "maintenanceManual" && !subSections.includes(key)
+        )
+      }));
+    } else {
+      // Tümünü seç
+      setRoleForm(prev => ({
+        ...prev,
+        allowedSections: [
+          ...prev.allowedSections.filter(key => key !== "maintenanceManual" && !subSections.includes(key)),
+          "maintenanceManual",
+          ...subSections
+        ]
+      }));
+    }
+  }, [getMaintenanceManualState, maintenanceManualSubSections]);
+  
+  // Alt sekme toggle
+  const handleSubSectionToggle = useCallback((subKey) => {
+    setRoleForm(prev => {
+      const exists = prev.allowedSections.includes(subKey);
+      const updated = exists
+        ? prev.allowedSections.filter(key => key !== subKey)
+        : [...prev.allowedSections, subKey];
+      
+      // Eğer tüm alt sekmeler seçiliyse, ana checkbox'ı da seç
+      const subSections = maintenanceManualSubSections.map(s => s.key);
+      const allSubsSelected = subSections.every(key => updated.includes(key));
+      
+      if (allSubsSelected && !updated.includes("maintenanceManual")) {
+        updated.push("maintenanceManual");
+      } else if (!allSubsSelected && updated.includes("maintenanceManual")) {
+        // Ana checkbox'ı kaldır ama alt sekmeleri bırak
+        return {
+          ...prev,
+          allowedSections: updated.filter(key => key !== "maintenanceManual")
+        };
+      }
+      
+      return {
+        ...prev,
+        allowedSections: updated
+      };
+    });
+  }, [maintenanceManualSubSections]);
 
   useEffect(() => {
     setRoleForm((prev) => ({
@@ -127,7 +231,8 @@ const AdminPanel = () => {
       { id: -7, name: "admin", displayName: "Admin", tokenLifetimeMinutes: 1440, allowedSections: [...ADMIN_SECTION_KEYS] },
       { id: -8, name: "machine", displayName: "Makine", tokenLifetimeMinutes: 43200, allowedSections: [...MACHINE_SECTION_KEYS] },
       { id: -9, name: "maintenanceStaff", displayName: "Bakım Personeli", tokenLifetimeMinutes: 480, allowedSections: [...MAINTENANCE_STAFF_SECTION_KEYS] },
-      { id: -10, name: "maintenanceManager", displayName: "Bakım Müdürü/Mühendisi", tokenLifetimeMinutes: 720, allowedSections: [...MAINTENANCE_MANAGER_SECTION_KEYS] },
+      { id: -10, name: "maintenanceEngineer", displayName: "Bakım Mühendisi", tokenLifetimeMinutes: 720, allowedSections: [...MAINTENANCE_MANAGER_SECTION_KEYS] },
+      { id: -11, name: "maintenanceManager", displayName: "Bakım Müdürü", tokenLifetimeMinutes: 720, allowedSections: [...MAINTENANCE_MANAGER_SECTION_KEYS] },
     ],
     []
   );
@@ -284,25 +389,44 @@ const AdminPanel = () => {
     setRolesError("");
     try {
       const response = await api.get("/rolesettings");
-      const fetchedRoles = (response.data || []).map((role) => {
-        const fallback = fallbackRoleOptions.find((item) => item.name === role.name);
+      const backendRoles = response.data || [];
+      
+      // Backend'den gelen rolleri unique hale getir (case-insensitive, aynı isimli rolleri tekilleştir)
+      const uniqueBackendRoles = [];
+      const seenNames = new Set();
+      
+      for (const role of backendRoles) {
+        const roleNameLower = role.name?.toLowerCase();
+        if (roleNameLower && !seenNames.has(roleNameLower)) {
+          seenNames.add(roleNameLower);
+          uniqueBackendRoles.push(role);
+        }
+      }
+      
+      const fetchedRoles = uniqueBackendRoles.map((role) => {
+        const fallback = fallbackRoleOptions.find((item) => item.name.toLowerCase() === role.name?.toLowerCase());
         const allowed = Array.isArray(role.allowedSections) && role.allowedSections.length > 0
           ? role.allowedSections
           : fallback?.allowedSections || BASE_ALLOWED_SECTION_KEYS;
         return {
           ...role,
+          displayName: role.displayName || fallback?.displayName || role.name,
           allowedSections: allowed,
         };
       });
-      // Eksik kalan varsayılan rolleri de ekle (özellikle bakım rolleri)
-      const merged = [
-        ...fetchedRoles,
-        ...fallbackRoleOptions.filter((fallback) => !fetchedRoles.some((r) => r.name === fallback.name)),
-      ];
+      
+      // Sadece backend'den gelmeyen fallback rolleri ekle (case-insensitive karşılaştırma)
+      const fetchedRoleNames = fetchedRoles.map(r => r.name?.toLowerCase()).filter(Boolean);
+      const missingFallbacks = fallbackRoleOptions.filter(
+        (fallback) => !fetchedRoleNames.includes(fallback.name.toLowerCase())
+      );
+      const merged = [...fetchedRoles, ...missingFallbacks];
       setRoles(merged);
     } catch (err) {
       console.error("Rol listesi alınamadı:", err);
       setRolesError("Roller yüklenirken hata oluştu.");
+      // Hata durumunda sadece fallback'leri göster
+      setRoles(fallbackRoleOptions);
     } finally {
       setRolesLoading(false);
     }
@@ -1282,21 +1406,77 @@ const AdminPanel = () => {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Görüntülenebilecek Sekmeler
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {sectionDisplayList.map((section) => (
-                      <label
-                        key={section.key}
-                        className="inline-flex items-center gap-2 text-gray-700 dark:text-gray-200 text-sm bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-3 py-2"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={roleForm.allowedSections.includes(section.key)}
-                          onChange={() => handleToggleSection(section.key)}
-                          className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                        />
-                        {section.label}
-                      </label>
-                    ))}
+                  <div className="space-y-2">
+                    {/* Ana sekmeler (maintenanceManual hariç) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {sectionDisplayList
+                        .filter(section => section.key !== "maintenanceManual" && !section.key.startsWith("maintenanceManual."))
+                        .map((section) => (
+                          <label
+                            key={section.key}
+                            className="inline-flex items-center gap-2 text-gray-700 dark:text-gray-200 text-sm bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded px-3 py-2"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={roleForm.allowedSections.includes(section.key)}
+                              onChange={() => handleToggleSection(section.key)}
+                              className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                            />
+                            {section.label}
+                          </label>
+                        ))}
+                    </div>
+                    
+                    {/* Bakım Manuel - Tree View */}
+                    {sectionDisplayList.some(s => s.key === "maintenanceManual") && (
+                      <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-2 bg-gray-50 dark:bg-gray-800">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newExpanded = new Set(expandedSections);
+                              if (newExpanded.has("maintenanceManual")) {
+                                newExpanded.delete("maintenanceManual");
+                              } else {
+                                newExpanded.add("maintenanceManual");
+                              }
+                              setExpandedSections(newExpanded);
+                            }}
+                            className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition"
+                          >
+                            {expandedSections.has("maintenanceManual") ? (
+                              <ChevronDown className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                            )}
+                          </button>
+                          <MaintenanceManualCheckbox
+                            state={getMaintenanceManualState()}
+                            onToggle={handleMaintenanceManualToggle}
+                          />
+                        </div>
+                        
+                        {/* Alt sekmeler - sadece açıkken göster */}
+                        {expandedSections.has("maintenanceManual") && (
+                          <div className="ml-6 mt-2 space-y-1">
+                            {maintenanceManualSubSections.map((section) => (
+                              <label
+                                key={section.key}
+                                className="inline-flex items-center gap-2 text-gray-700 dark:text-gray-200 text-sm bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded px-3 py-2 w-full"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={roleForm.allowedSections.includes(section.key)}
+                                  onChange={() => handleSubSectionToggle(section.key)}
+                                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                />
+                                {section.label.replace("Bakım Manuel - ", "")}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 

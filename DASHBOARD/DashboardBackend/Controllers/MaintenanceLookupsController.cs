@@ -232,10 +232,10 @@ namespace DashboardBackend.Controllers
             return NoContent();
         }
 
-        // Causes (machine + category scoped)
+        // Causes (category scoped, not machine scoped)
         public class CauseRequest
         {
-            public int MachineId { get; set; }
+            public int? MachineId { get; set; } // Optional, for backward compatibility
             public int CategoryId { get; set; }
             public int MachineGroupId { get; set; }
             public string Name { get; set; } = string.Empty;
@@ -246,8 +246,7 @@ namespace DashboardBackend.Controllers
         public async Task<IActionResult> GetCauses([FromQuery] int machineId, [FromQuery] int? categoryId, [FromQuery] int? machineGroupId)
         {
             var query = _context.Causes.AsQueryable();
-            if (machineId > 0)
-                query = query.Where(x => x.MachineId == machineId);
+            // MachineId artık filtreleme için kullanılmıyor - sadece kategori ve grup bazlı
             if (categoryId.HasValue && categoryId.Value > 0)
                 query = query.Where(x => x.CategoryId == categoryId.Value);
             if (machineGroupId.HasValue && machineGroupId > 0)
@@ -259,12 +258,12 @@ namespace DashboardBackend.Controllers
         [HttpPost("causes")]
         public async Task<IActionResult> CreateCause([FromBody] CauseRequest model)
         {
-            if (model.MachineId <= 0) return BadRequest("MachineId is required");
+            // MachineId artık zorunlu değil - sadece CategoryId ve MachineGroupId zorunlu
             if (model.CategoryId <= 0) return BadRequest("CategoryId is required");
             if (model.MachineGroupId <= 0) return BadRequest("MachineGroupId is required");
             var cause = new MaintenanceCause
             {
-                MachineId = model.MachineId,
+                MachineId = model.MachineId ?? 0, // Backward compatibility için 0 kullan
                 CategoryId = model.CategoryId,
                 MachineGroupId = model.MachineGroupId,
                 Name = model.Name,
@@ -282,7 +281,7 @@ namespace DashboardBackend.Controllers
         {
             var cause = await _context.Causes.FindAsync(id);
             if (cause == null) return NotFound();
-            if (model.MachineId > 0) cause.MachineId = model.MachineId;
+            if (model.MachineId.HasValue && model.MachineId.Value > 0) cause.MachineId = model.MachineId.Value;
             if (model.CategoryId > 0) cause.CategoryId = model.CategoryId;
             if (model.MachineGroupId > 0) cause.MachineGroupId = model.MachineGroupId;
             cause.Name = model.Name ?? cause.Name;

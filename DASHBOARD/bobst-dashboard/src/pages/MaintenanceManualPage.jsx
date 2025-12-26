@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { getTranslation } from "../utils/translations";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../utils/api";
+import ElectricBorder from "../components/ElectricBorder";
 import {
   Camera,
   CheckCircle2,
@@ -15,6 +16,12 @@ import {
   Sparkles,
   Plus,
   Trash2,
+  User,
+  Image,
+  FileText,
+  Package,
+  Cog,
+  Wrench,
 } from "lucide-react";
 
 const formatDurationMinutes = (start, end) => {
@@ -68,7 +75,45 @@ const initialLookups = {
 
 function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
   const { user } = useAuth();
-  const [activeSubTab, setActiveSubTab] = useState("record"); // record | reports | admin
+  
+  // Kullanıcının erişebileceği sekmeleri kontrol et
+  const getAllowedSubTabs = useMemo(() => {
+    if (!user?.roleSettings?.allowedSections) return ["record", "reports", "admin"];
+    
+    const allowed = [];
+    if (user.roleSettings.allowedSections.includes("maintenanceManual.record") || 
+        user.roleSettings.allowedSections.includes("maintenanceManual")) {
+      allowed.push("record");
+    }
+    if (user.roleSettings.allowedSections.includes("maintenanceManual.reports")) {
+      allowed.push("reports");
+    }
+    if (user.roleSettings.allowedSections.includes("maintenanceManual.admin")) {
+      allowed.push("admin");
+    }
+    
+    // Eğer hiçbir sekme izni yoksa ama maintenanceManual varsa, varsayılan olarak record'u göster
+    if (allowed.length === 0 && user.roleSettings.allowedSections.includes("maintenanceManual")) {
+      allowed.push("record");
+    }
+    
+    return allowed.length > 0 ? allowed : ["record", "reports", "admin"]; // Fallback
+  }, [user?.roleSettings?.allowedSections]);
+  
+  // İlk erişilebilir sekmeyi seç
+  const initialSubTab = useMemo(() => {
+    return getAllowedSubTabs[0] || "record";
+  }, [getAllowedSubTabs]);
+  
+  const [activeSubTab, setActiveSubTab] = useState(initialSubTab); // record | reports | admin
+  
+  // Eğer activeSubTab erişilebilir değilse, ilk erişilebilir sekmeye geç
+  useEffect(() => {
+    if (!getAllowedSubTabs.includes(activeSubTab)) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [getAllowedSubTabs, activeSubTab, initialSubTab]);
+  
   const [showDrawer, setShowDrawer] = useState(false);
   const [lookups, setLookups] = useState(initialLookups);
 
@@ -95,7 +140,7 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
   const [drawerCauses, setDrawerCauses] = useState([]);
   const [drawerOperators, setDrawerOperators] = useState([]);
   const [isLoadingLookups, setIsLoadingLookups] = useState(false);
-  const [type, setType] = useState("maintenance"); // maintenance | fault
+  const [type, setType] = useState("fault"); // maintenance | fault
   const [machine, setMachine] = useState("");
   const [category, setCategory] = useState("");
   const [cause, setCause] = useState("");
@@ -107,6 +152,8 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
   const [endedAt, setEndedAt] = useState(null);
   const [manualStart, setManualStart] = useState("");
   const [manualEnd, setManualEnd] = useState("");
+  const [selectedPersonnel, setSelectedPersonnel] = useState([]); // Bakım personeli seçimi (array)
+  const [maintenancePersonnel, setMaintenancePersonnel] = useState([]); // Bakım personeli listesi
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [annotatedPreview, setAnnotatedPreview] = useState(null);
@@ -118,6 +165,7 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
   const isDrawing = useRef(false);
+  const isLoadingRecordsRef = useRef(false); // Loading flag - infinite loop'u önlemek için
   
   // Edit record state
   const [editingRecord, setEditingRecord] = useState(null);
@@ -161,61 +209,77 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
     return found?.name || `Operatör #${operatorId}`;
   }, [allOperators]);
 
-  // Load all lookup data for record display
+  // Load all lookup data for record display - optimized to reduce RAM usage
   const loadAllLookups = async () => {
     try {
       // Load all machine groups first
       const groupsRes = await api.get("/maintenance/lookups/machine-groups");
       const groups = groupsRes.data || [];
+      if (groups.length === 0) return;
       
-      // Load all machines, categories, causes, operators from all groups
-      const machinesPromises = groups.map((g) =>
-        api.get(`/maintenance/lookups/machines?machineGroupId=${g.id}`).catch(() => ({ data: [] }))
-      );
-      const categoriesPromises = groups.map((g) =>
-        api.get(`/maintenance/lookups/categories?machineGroupId=${g.id}`).catch(() => ({ data: [] }))
-      );
-      const causesPromises = groups.map((g) =>
-        api.get(`/maintenance/lookups/causes?machineId=0&machineGroupId=${g.id}`).catch(() => ({ data: [] }))
-      );
-
-      const [machinesResults, categoriesResults, causesResults] = await Promise.all([
-        Promise.all(machinesPromises),
-        Promise.all(categoriesPromises),
-        Promise.all(causesPromises),
-      ]);
-
-      const allMachinesFlat = machinesResults.flatMap((r) => r.data || []);
-      const allCategoriesFlat = categoriesResults.flatMap((r) => r.data || []);
-      const allCausesFlat = causesResults.flatMap((r) => r.data || []);
+      // Batch requests: Load machines, categories, causes in smaller batches to reduce memory pressure
+      const BATCH_SIZE = 3; // Process 3 groups at a time
+      const allMachinesFlat = [];
+      const allCategoriesFlat = [];
+      const allCausesFlat = [];
+      
+      for (let i = 0; i < groups.length; i += BATCH_SIZE) {
+        const batch = groups.slice(i, i + BATCH_SIZE);
+        const [machinesResults, categoriesResults, causesResults] = await Promise.all([
+          Promise.all(batch.map((g) => api.get(`/maintenance/lookups/machines?machineGroupId=${g.id}`).catch(() => ({ data: [] })))),
+          Promise.all(batch.map((g) => api.get(`/maintenance/lookups/categories?machineGroupId=${g.id}`).catch(() => ({ data: [] })))),
+          Promise.all(batch.map((g) => api.get(`/maintenance/lookups/causes?machineId=0&machineGroupId=${g.id}`).catch(() => ({ data: [] })))),
+        ]);
+        
+        allMachinesFlat.push(...machinesResults.flatMap((r) => r.data || []));
+        allCategoriesFlat.push(...categoriesResults.flatMap((r) => r.data || []));
+        allCausesFlat.push(...causesResults.flatMap((r) => r.data || []));
+      }
 
       setAllMachines(allMachinesFlat);
       setAllCategories(allCategoriesFlat);
       setAllCauses(allCausesFlat);
 
-      // Load operators for all machines
-      const operatorPromises = allMachinesFlat.map((m) =>
-        api.get(`/maintenance/lookups/operators?machineId=${m.id}`).catch(() => ({ data: [] }))
-      );
-      const operatorsResults = await Promise.all(operatorPromises);
-      const allOperatorsFlat = operatorsResults.flatMap((r) => r.data || []);
+      // Load operators in batches too
+      const allOperatorsFlat = [];
+      for (let i = 0; i < allMachinesFlat.length; i += BATCH_SIZE) {
+        const batch = allMachinesFlat.slice(i, i + BATCH_SIZE);
+        const operatorsResults = await Promise.all(
+          batch.map((m) => api.get(`/maintenance/lookups/operators?machineId=${m.id}`).catch(() => ({ data: [] })))
+        );
+        allOperatorsFlat.push(...operatorsResults.flatMap((r) => r.data || []));
+      }
       setAllOperators(allOperatorsFlat);
     } catch (err) {
       console.error("Lookup verileri yüklenemedi:", err);
     }
   };
 
-  const loadRecords = useCallback(async () => {
+  // loadRecords'u useCallback yerine normal fonksiyon yapıyoruz - loop'u önlemek için
+  // RAM kullanımını azaltmak için sadece son 500 kaydı alıyoruz ve gereksiz veri işlemlerini minimize ediyoruz
+  const loadRecords = async () => {
+    if (isLoadingRecordsRef.current) {
+      return;
+    }
+    
+    isLoadingRecordsRef.current = true;
+    
     try {
       const res = await api.get("/maintenance/records");
       const items = res.data?.items || res.data || [];
+      
       // Filter out invalid records (must have id, machineGroupId, and machineId)
-      const validItems = items.filter((j) => 
-        j && 
-        j.id && 
-        j.machineGroupId && 
-        j.machineId // Machine selection is mandatory
-      );
+      // RAM tasarrufu için önce filtrele, sonra map et
+      const validItems = items
+        .filter((j) => 
+          j && 
+          j.id && 
+          j.machineGroupId && 
+          j.machineId // Machine selection is mandatory
+        )
+        .slice(0, 500); // Son 500 kayıt - RAM tasarrufu
+      
+      // Map işlemini optimize et - sadece gerekli alanları al
       const mapped = validItems.map((j) => ({
         id: String(j.id),
         type: j.type || "maintenance",
@@ -230,41 +294,86 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
         durationMinutes: j.durationMinutes || 0,
         createdAt: j.createdAt,
         createdByUserId: j.createdByUserId,
+        createdByUserName: j.createdByUserName || "Bilinmeyen",
         machineId: j.machineId,
         categoryId: j.categoryId,
         causeId: j.causeId,
         operatorId: j.operatorId,
         machineGroupId: j.machineGroupId,
-        photoData: j.photoData,
+        photoData: j.photoData ? "exists" : null, // Backend'den "exists" geliyor, RAM tasarrufu
         materialsJson: j.materialsJson,
+        hasPhoto: !!j.photoData,
+        hasNote: !!(j.notes && j.notes?.trim()),
+        hasMaterials: !!(j.materialsJson && j.materialsJson?.trim()),
       }));
+      
       setEntries(mapped);
     } catch (err) {
-      console.error("Bakım kayıtları yüklenemedi:", err);
+      console.error("Kayıtlar yüklenirken hata:", err);
+    } finally {
+      isLoadingRecordsRef.current = false;
     }
-  }, [resolveMachineName, resolveCategoryName, resolveCauseName, resolveOperatorName]);
+  };
 
   // İlk açılışta lookup verilerini yükle, sonra kayıtları çek
   useEffect(() => {
     loadAllLookups();
+    loadMaintenancePersonnel();
   }, []);
+
+  // Bakım personeli listesini yükle
+  const loadMaintenancePersonnel = async () => {
+    try {
+      const res = await api.get("/maintenance/maintenance-personnel");
+      const personnel = res.data || [];
+      // Sıralama: Bakım Personeli, Bakım Mühendisi, Bakım Müdürü
+      const sortedPersonnel = personnel.sort((a, b) => {
+        const roleOrder = {
+          "maintenancestaff": 1,
+          "maintenanceengineer": 2,
+          "maintenancemanager": 3,
+        };
+        const aRole = (a.role || "").toLowerCase();
+        const bRole = (b.role || "").toLowerCase();
+        const aOrder = roleOrder[aRole] || 99;
+        const bOrder = roleOrder[bRole] || 99;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        // Aynı rolse isme göre sırala
+        return (a.username || "").localeCompare(b.username || "");
+      });
+      setMaintenancePersonnel(sortedPersonnel);
+    } catch (err) {
+      console.error("Bakım personeli listesi yüklenemedi:", err);
+    }
+  };
 
   // Lookup verileri yüklendikten sonra kayıtları çek ve periyodik güncelle
   useEffect(() => {
+    let timer = null;
+    
     // Wait for lookup data to be loaded before loading records
     // This ensures resolveMachineName etc. functions work correctly
-    if (allMachines.length > 0) {
+    const fetchRecords = () => {
       loadRecords();
-      const timer = setInterval(() => {
-        loadRecords();
-      }, 15000);
-      return () => clearInterval(timer);
+    };
+    
+    if (allMachines.length > 0) {
+      fetchRecords();
+      // Kayıtları 15 saniyede bir yenile
+      timer = setInterval(() => {
+        fetchRecords();
+      }, 15000); // 15 saniye
     } else {
       // If lookups aren't loaded yet, still try to load records once
       // (they'll show IDs until lookups are ready)
-      loadRecords();
+      fetchRecords();
     }
-  }, [allMachines.length, loadRecords]);
+    
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allMachines.length]); // loadRecords'i dependency'den çıkarıyoruz - loop'u önlemek için
 
   // Her saniye ekranda sürelerin canlı güncellenmesi için tick
   useEffect(() => {
@@ -338,19 +447,23 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
     const loadMachineGroups = async () => {
       try {
         const res = await api.get("/maintenance/lookups/machine-groups");
-        setMachineGroups(res.data || []);
-        if (!selectedGroupId && res.data && res.data.length > 0) {
-          setSelectedGroupId(res.data[0].id);
-        }
-        if (!drawerGroupId && res.data && res.data.length > 0) {
-          setDrawerGroupId(res.data[0].id);
+        const groups = res.data || [];
+        setMachineGroups(groups);
+        
+        // Progressive disclosure: Başlangıçta seçili grup olmasın, kullanıcı manuel seçsin
+        // Drawer için varsayılan grup seç (kayıt oluşturma için)
+        if (groups.length > 0) {
+          if (!drawerGroupId) {
+            setDrawerGroupId(groups[0].id);
+          }
         }
       } catch (err) {
         console.error("Makine grupları yüklenemedi:", err);
       }
     };
     loadMachineGroups();
-  }, [selectedGroupId, drawerGroupId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Sadece ilk yüklemede çalış - loop'u önlemek için
 
   useEffect(() => {
     const loadGroupDetails = async () => {
@@ -439,14 +552,25 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
 
   useEffect(() => {
     const loadDrawerCausesForCategory = async () => {
-      if (!category) return;
+      if (!category || !drawerGroupId) {
+        setDrawerCauses([]);
+        setCause("");
+        return;
+      }
+      // drawerCategories henüz yüklenmemişse bekle
+      if (!drawerCategories || drawerCategories.length === 0) {
+        return;
+      }
       const catObj = drawerCategories.find((c) => c.name === category);
-      const machineObj = drawerMachines.find((m) => m.name === machine);
-      const catId = catObj?.id;
-      const machineId = machineObj?.id || 0;
-      if (!catId) return;
+      if (!catObj || !catObj.id) {
+        setDrawerCauses([]);
+        setCause("");
+        return;
+      }
+      const catId = catObj.id;
+      // Sebepler sadece kategoriye bağlı, makineye bağlı değil
       try {
-        const res = await api.get(`/maintenance/lookups/causes?machineId=${machineId}&categoryId=${catId}&machineGroupId=${drawerGroupId || 0}`);
+        const res = await api.get(`/maintenance/lookups/causes?machineId=0&categoryId=${catId}&machineGroupId=${drawerGroupId}`);
         setDrawerCauses(res.data || []);
         setCause((prev) => {
           const exists = (res.data || []).some((c) => c.name === prev);
@@ -454,10 +578,12 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
         });
       } catch (err) {
         console.error("Drawer sebepler yüklenemedi:", err);
+        setDrawerCauses([]);
+        setCause("");
       }
     };
     loadDrawerCausesForCategory();
-  }, [category, drawerCategories, drawerMachines, drawerGroupId, machine]);
+  }, [category, drawerCategories, drawerGroupId]);
 
   const refreshOperatorsForMachine = async (machineId) => {
     if (!machineId) {
@@ -607,18 +733,26 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
       const photoDataArray = await Promise.all(
         editPhotos.map(async (photo) => {
           if (photo.annotated) return photo.annotated;
+          if (photo.preview && !photo.file) {
+            // Existing photo, keep as is
+            return photo.preview;
+          }
           // Convert file to base64 if not annotated
           return new Promise((resolve) => {
             const reader = new FileReader();
             reader.onload = () => resolve(reader.result);
-            reader.readAsDataURL(photo.file);
+            if (photo.file) {
+              reader.readAsDataURL(photo.file);
+            } else {
+              resolve(null);
+            }
           });
         })
       );
       
       const payload = {
-        notes: editNote,
-        photoData: photoDataArray.length > 0 ? JSON.stringify(photoDataArray) : null,
+        notes: editNote || null,
+        photoData: photoDataArray.length > 0 && photoDataArray.some(p => p) ? JSON.stringify(photoDataArray.filter(p => p)) : null,
         materials: editMaterials
           .filter((m) => m.name && m.name.trim() && m.quantity)
           .map((m) => ({
@@ -630,17 +764,28 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
         categoryId: editCategoryId || null,
         causeId: editCauseId || null,
       };
-      await api.put(`/maintenance/records/${editingRecord.id}`, payload);
+      
+      console.log("Updating record:", editingRecord.id, payload);
+      const response = await api.put(`/maintenance/records/${editingRecord.id}`, payload);
+      console.log("Update response:", response);
+      
+      // Close drawer and reset
       setEditingRecord(null);
       setEditNote("");
       setEditPhotos([]);
       setEditMaterials([]);
       setEditCategoryId(null);
       setEditCauseId(null);
-      loadRecords(); // Refresh list
+      
+      // Refresh list
+      await loadRecords();
+      
+      // Show success message
+      alert("Kayıt başarıyla güncellendi");
     } catch (err) {
       console.error("Kayıt güncellenemedi:", err);
-      alert("Kayıt güncellenirken hata oluştu");
+      const errorMsg = err.response?.data?.message || err.message || "Kayıt güncellenirken hata oluştu";
+      alert(`Hata: ${errorMsg}`);
     }
   };
 
@@ -688,7 +833,7 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
   };
 
   const resetForm = () => {
-    setType("maintenance");
+    setType("fault");
     setMachine("");
     setCategory("");
     setCause("");
@@ -700,6 +845,7 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
     setEndedAt(null);
     setManualStart("");
     setManualEnd("");
+    setSelectedPersonnel([]);
     setPhotoFile(null);
     setPhotoPreview(null);
     setAnnotatedPreview(null);
@@ -718,8 +864,43 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
     const operatorObj = drawerOperators.find((o) => o.name === operator);
 
     const nowDefault = formatLocalDateTimeForApi(new Date());
-    const start = startMode === "now" ? (startedAt || nowDefault) : manualStart || null;
-    const end = startMode === "now" ? endedAt : manualEnd || null;
+    let start, end;
+    
+    if (startMode === "now") {
+      start = startedAt || nowDefault;
+      end = endedAt || null;
+    } else {
+      // Manuel tarih/saat girişi - datetime-local formatını API formatına çevir
+      if (manualStart) {
+        // datetime-local format: "2024-01-15T14:30" -> "2024-01-15T14:30:00"
+        // Eğer saniye yoksa ekle
+        let formattedStart = manualStart;
+        if (formattedStart.includes("T") && !formattedStart.includes(":")) {
+          formattedStart += ":00:00";
+        } else if (formattedStart.includes("T") && formattedStart.split(":").length === 2) {
+          formattedStart += ":00";
+        }
+        start = formattedStart;
+      } else {
+        start = null;
+      }
+      
+      if (manualEnd) {
+        let formattedEnd = manualEnd;
+        if (formattedEnd.includes("T") && !formattedEnd.includes(":")) {
+          formattedEnd += ":00:00";
+        } else if (formattedEnd.includes("T") && formattedEnd.split(":").length === 2) {
+          formattedEnd += ":00";
+        }
+        end = formattedEnd;
+      } else {
+        end = null;
+      }
+    }
+
+    // Seçilen bakım personellerinden ilkini performedByUserId olarak gönder
+    // (Backend şu an tek personel destekliyor, ileride genişletilebilir)
+    const performedByUserId = selectedPersonnel.length > 0 ? selectedPersonnel[0].id : null;
 
     const payload = {
       type: type || "maintenance",
@@ -732,7 +913,7 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
       endedAt: end,
       notes: note || null,
       createdByUserId: user?.id || 0,
-      performedByUserId: null,
+      performedByUserId: performedByUserId,
       isBackdated: startMode === "manual",
     };
 
@@ -845,8 +1026,8 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
   };
 
   const handleAddCause = async (name) => {
-    if (!name || !selectedGroupId || groupMachines.length === 0) {
-      alert("Sebep eklemek için önce bir makine grubu seçin ve makine ekleyin.");
+    if (!name || !selectedGroupId) {
+      alert("Sebep eklemek için önce bir makine grubu seçin.");
       return;
     }
     if (!selectedCategoryAdminId) {
@@ -854,11 +1035,9 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
       return;
     }
     try {
-      // Seçilen kategoriyi kullan, makine için ilk makineyi kullan (kategori makine grubuna bağlı)
-      const firstMachineId = groupMachines[0].id;
+      // Sebep artık sadece kategoriye bağlı, makineye bağlı değil
       const res = await api.post("/maintenance/lookups/causes", {
         name,
-        machineId: firstMachineId,
         categoryId: selectedCategoryAdminId,
         machineGroupId: selectedGroupId,
         isActive: true,
@@ -911,17 +1090,74 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
 
   const handleConfirmDelete = async () => {
     const { type, id } = confirmDelete;
+    
+    if (!id) {
+      setConfirmDelete({ open: false, type: "", id: null, name: "" });
+      return;
+    }
+    
+    if (!type) {
+      setConfirmDelete({ open: false, type: "", id: null, name: "" });
+      return;
+    }
+    
     try {
-      if (type === "group") await handleDeleteMachineGroup(id);
-      if (type === "machine") await handleDeleteMachine(id);
-      if (type === "category") await handleDeleteCategory(id);
-      if (type === "cause") await handleDeleteCause(id);
-      if (type === "operator") await handleDeleteOperator(id);
-      if (type === "record") {
-        await api.delete(`/maintenance/records/${id}`);
-        await loadRecords();
+      if (type === "group") {
+        await handleDeleteMachineGroup(id);
+      } else if (type === "machine") {
+        await handleDeleteMachine(id);
+      } else if (type === "category") {
+        await handleDeleteCategory(id);
+      } else if (type === "cause") {
+        await handleDeleteCause(id);
+      } else if (type === "operator") {
+        await handleDeleteOperator(id);
+      } else if (type === "record") {
+        try {
+          await api.delete(`/maintenance/records/${id}`, {
+            timeout: 8000
+          });
+        } catch (apiErr) {
+          if (apiErr.code === 'ECONNABORTED' || apiErr.message.includes('timeout')) {
+            alert("Silme işlemi zaman aşımına uğradı. Backend yanıt vermiyor olabilir.");
+          } else {
+            alert("Silme işlemi sırasında hata oluştu: " + (apiErr.response?.data?.message || apiErr.message));
+          }
+          throw apiErr;
+        }
+        
+        // Modal'ı önce kapat, sonra kayıtları yenile (RAM sorununu önlemek için)
+        setConfirmDelete({ open: false, type: "", id: null, name: "" });
+        
+        // loadRecords'u setTimeout ile geciktir (state update'in tamamlanması için)
+        setTimeout(async () => {
+          try {
+            await loadRecords();
+          } catch (err) {
+            console.error("Kayıtlar yenilenirken hata:", err);
+          }
+        }, 200);
+        
+        return;
+      } else {
+        alert("Bilinmeyen silme tipi: " + type);
+        setConfirmDelete({ open: false, type: "", id: null, name: "" });
+        return;
       }
-    } finally {
+      
+      // Başarılı olduysa modal'ı kapat
+      setConfirmDelete({ open: false, type: "", id: null, name: "" });
+      console.log("[DELETE] Modal kapatıldı");
+    } catch (err) {
+      console.error("[DELETE] Silme hatası:", err);
+      console.error("[DELETE] Hata detayları:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        stack: err.stack
+      });
+      alert("Silme işlemi sırasında hata oluştu: " + (err.response?.data?.message || err.message));
+      // Hata olsa bile modal'ı kapat (kullanıcı tekrar deneyebilir)
       setConfirmDelete({ open: false, type: "", id: null, name: "" });
     }
   };
@@ -972,29 +1208,34 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
         </button>
       </div>
 
-      {/* Tabs (hide for maintenanceStaff) */}
-      {!user || user.role !== "maintenanceStaff" ? (
+      {/* Sekmeleri sadece birden fazla erişilebilir sekme varsa göster */}
+      {getAllowedSubTabs.length > 1 ? (
         <div className="flex flex-wrap gap-2">
-          {[{ key: "record", label: getTranslation("maintenanceRecord", currentLanguage) || "Kayıt", icon: FileUp },
+          {[
+            { key: "record", label: getTranslation("maintenanceRecord", currentLanguage) || "Kayıt", icon: FileUp },
             { key: "reports", label: getTranslation("maintenanceReports", currentLanguage) || "Raporlar", icon: Sparkles },
-            { key: "admin", label: getTranslation("maintenanceAdmin", currentLanguage) || "Yönetim", icon: Users }].map((tab) => {
-            const Icon = tab.icon;
-            const active = activeSubTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveSubTab(tab.key)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition ${
-                  active
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-500/30"
-                    : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700"
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            );
-          })}
+            { key: "admin", label: getTranslation("maintenanceAdmin", currentLanguage) || "Yönetim", icon: Users }
+          ]
+            .filter(tab => getAllowedSubTabs.includes(tab.key))
+            .map((tab) => {
+              const Icon = tab.icon;
+              const active = activeSubTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveSubTab(tab.key)}
+                  className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-semibold transition ${
+                    active
+                      ? "bg-blue-600 text-white shadow-md shadow-blue-500/30"
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  <Icon className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">{tab.label}</span>
+                  <span className="sm:hidden">{tab.label.split(" ")[0]}</span>
+                </button>
+              );
+            })}
         </div>
       ) : null}
 
@@ -1004,51 +1245,115 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
             Yeni bakım / arıza kayıtlarını sol üstteki <strong>+ Yeni</strong> butonu ile oluşturabilirsiniz. Aşağıda son kayıtlar info kartlar olarak listelenir.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {entries.map((e) => {
+            {entries.map((e, index) => {
               const isCompleted = !!e.end;
-              // Tamamlanan kayıtlar için gri tonlar, devam edenler için renkli
-              const tone = isCompleted
-                ? "border-gray-300 bg-gray-100/70 dark:bg-gray-800/50 dark:border-gray-700 opacity-75"
+              // Modern kart tasarımı - tamamlanan kayıtlar için gri tonlar, devam edenler için renkli
+              const cardStyle = isCompleted
+                ? "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 shadow-sm hover:shadow-md transition-all duration-200"
                 : e.type === "fault"
-                ? "border-rose-400 bg-rose-50/70 dark:bg-rose-900/20"
-                : "border-emerald-400 bg-emerald-50/70 dark:bg-emerald-900/20";
+                ? "border-rose-300 dark:border-rose-700/50 bg-gradient-to-br from-rose-50/50 to-white dark:from-rose-950/30 dark:to-gray-800/60 shadow-md hover:shadow-lg transition-all duration-200 ring-1 ring-rose-200/50 dark:ring-rose-800/30"
+                : "border-emerald-300 dark:border-emerald-700/50 bg-gradient-to-br from-emerald-50/50 to-white dark:from-emerald-950/30 dark:to-gray-800/60 shadow-md hover:shadow-lg transition-all duration-200 ring-1 ring-emerald-200/50 dark:ring-emerald-800/30";
               const badge = e.type === "fault"
                 ? (getTranslation("fault", currentLanguage) || "Arıza")
                 : (getTranslation("maintenance", currentLanguage) || "Bakım");
               const statusLabel = isCompleted ? (getTranslation("completed", currentLanguage) || "Bitti") : (getTranslation("inProgress", currentLanguage) || "Devam Ediyor");
-              return (
+              
+              const cardInnerContent = (
                 <div
-                  key={e.id}
-                  className={`rounded-xl border ${tone} p-3 flex flex-col justify-between shadow-sm transition-opacity`}
+                  className={`rounded-2xl border ${cardStyle} p-4 flex flex-col justify-between relative overflow-hidden group ${
+                    !isCompleted ? "hover:ring-opacity-60 dark:hover:ring-opacity-50" : ""
+                  } ${
+                    !isCompleted && e.type === "fault" 
+                      ? "hover:ring-rose-300/60 dark:hover:ring-rose-700/50 animate-pulse-subtle" 
+                      : !isCompleted && e.type === "maintenance"
+                      ? "hover:ring-emerald-300/60 dark:hover:ring-emerald-700/50 animate-pulse-subtle"
+                      : ""
+                  }`}
+                  style={{
+                    animationDuration: !isCompleted ? "3s" : "none",
+                  }}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs px-2 py-1 rounded-full bg-white/80 text-gray-900 border border-gray-200">
+                  
+                  {/* Arıza için dönen dişli animasyonu - sadece devam edenler için */}
+                  {!isCompleted && e.type === "fault" && (
+                    <div className="absolute top-3 right-3 opacity-40 z-10">
+                      <Cog className="w-7 h-7 text-rose-500 dark:text-rose-400 animate-spin" style={{ animationDuration: "3s" }} />
+                    </div>
+                  )}
+                  
+                  {/* Bakım için sabit anahtar ikonu - sadece devam edenler için */}
+                  {!isCompleted && e.type === "maintenance" && (
+                    <div className="absolute top-3 right-3 opacity-40 z-10">
+                      <Wrench className="w-7 h-7 text-emerald-500 dark:text-emerald-400" />
+                    </div>
+                  )}
+                  
+                  {/* "Devam ediyor" badge - çark/anahtarın solunda */}
+                  {!isCompleted && (
+                    <span
+                      className="absolute top-3 right-11 text-[10px] px-2.5 py-1 rounded-full bg-amber-100/90 dark:bg-amber-900/50 text-amber-700 dark:text-amber-200 z-20 backdrop-blur-sm font-medium shadow-sm"
+                    >
+                      {statusLabel}
+                    </span>
+                  )}
+                  
+                  <div className="flex items-start justify-between gap-2 relative z-10">
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                          e.type === "fault" 
+                            ? "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200 border border-rose-200 dark:border-rose-800" 
+                            : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800"
+                        }`}>
                           {badge}
                         </span>
-                        <span className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                        {/* Makine ismi - büyük */}
+                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                           {e.machine || "-"}
                         </span>
+                        {/* Operatör ismi - küçük */}
+                        {e.operator && e.operator !== `Operatör #${e.operatorId}` && (
+                          <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                            · {e.operator}
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-gray-700 dark:text-gray-200">
                         {e.category || "-"} {e.cause ? `· ${e.cause}` : ""}
                       </div>
+                      {/* Kaydı kim açmış */}
+                      <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                        <User className="w-3 h-3" />
+                        <span>{e.createdByUserName || "Bilinmeyen"}</span>
+                      </div>
                     </div>
-                    <span
-                      className={`text-[10px] px-2 py-1 rounded-full ${
-                        isCompleted
-                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-100"
-                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-100"
-                      }`}
-                    >
-                      {statusLabel}
-                    </span>
+                    {/* Tamamlanan kayıtlar için status badge - sağ üstte */}
+                    {isCompleted && (
+                      <span
+                        className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-100/90 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-200 font-medium shadow-sm backdrop-blur-sm"
+                      >
+                        {statusLabel}
+                      </span>
+                    )}
                   </div>
-                  <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 line-clamp-2">
+                  <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 line-clamp-2 relative z-10">
                     {e.note || "-"}
                   </div>
-                   <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
+                  {/* İkonlar - tarihin üstünde, sağda */}
+                  {(e.hasPhoto || e.hasNote || e.hasMaterials) && (
+                    <div className="mt-2 flex items-center justify-end gap-1.5">
+                      {e.hasPhoto && (
+                        <Image className="w-3.5 h-3.5 text-blue-500" title="Fotoğraf var" />
+                      )}
+                      {e.hasNote && (
+                        <FileText className="w-3.5 h-3.5 text-green-500" title="Not var" />
+                      )}
+                      {e.hasMaterials && (
+                        <Package className="w-3.5 h-3.5 text-purple-500" title="Malzeme var" />
+                      )}
+                    </div>
+                  )}
+                   <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400 relative z-10">
                      <span>
                        {getTranslation("duration", currentLanguage) || "Süre"}:{" "}
                        {formatDurationMinutes(e.start, e.end || new Date(nowTick).toISOString())}
@@ -1060,7 +1365,7 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                      user?.roleSettings?.name === "admin" || 
                      user?.roleSettings?.name === "maintenanceManager" ||
                      user?.roleSettings?.name === "maintenanceEngineer") && (
-                    <div className="mt-2 flex gap-1">
+                    <div className="mt-2 flex flex-wrap gap-1">
                       <button
                         onClick={() => {
                           setEditingRecord(e);
@@ -1141,6 +1446,23 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                   )}
                 </div>
               );
+              
+              return !isCompleted ? (
+                <ElectricBorder
+                  key={e.id}
+                  color={e.type === "fault" ? "#fb7185" : "#34d399"}
+                  speed={1}
+                  chaos={0.5}
+                  thickness={2}
+                  style={{ borderRadius: 16 }}
+                >
+                  {cardInnerContent}
+                </ElectricBorder>
+              ) : (
+                <div key={e.id}>
+                  {cardInnerContent}
+                </div>
+              );
             })}
             {entries.length === 0 && (
               <div className="text-sm text-gray-500 dark:text-gray-400">
@@ -1164,7 +1486,7 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
               <button onClick={() => setShowDrawer(false)} className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-200 dark:hover:text-white">Kapat</button>
             </div>
             <div className="p-4 space-y-4 overflow-auto">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Makine Grubu</label>
                   <select
@@ -1214,12 +1536,15 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Kategori</label>
                   <select
                     value={category}
-                    onChange={(e) => setCategory(e.target.value)}
+                    onChange={(e) => {
+                      setCategory(e.target.value);
+                      setCause(""); // Kategori değiştiğinde sebep seçimini sıfırla
+                    }}
                     className="mt-2 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
                   >
                     <option value="">{getTranslation("select", currentLanguage) || "Seçin"}</option>
@@ -1242,10 +1567,90 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Not</label>
-                <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={4} className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm" placeholder="Kısa not" />
-              </div>
+              {/* Tarih/Saat Modu - Bakım mühendisi için */}
+              {(user?.roleSettings?.name === "maintenanceEngineer" || 
+                user?.roleSettings?.name === "maintenanceManager" || 
+                user?.roleSettings?.name === "admin") && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Zaman Modu</label>
+                    <div className="mt-2 flex gap-2">
+                      <button 
+                        type="button"
+                        onClick={() => setStartMode("now")} 
+                        className={`px-3 py-2 rounded-md border text-sm ${
+                          startMode === "now" 
+                            ? "border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-900/20" 
+                            : "border-gray-300 dark:border-gray-600"
+                        }`}
+                      >
+                        Şimdi
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setStartMode("manual")} 
+                        className={`px-3 py-2 rounded-md border text-sm ${
+                          startMode === "manual" 
+                            ? "border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-900/20" 
+                            : "border-gray-300 dark:border-gray-600"
+                        }`}
+                      >
+                        Geçmiş Kayıt
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {startMode === "manual" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Başlangıç Tarih/Saat</label>
+                        <input
+                          type="datetime-local"
+                          value={manualStart}
+                          onChange={(e) => setManualStart(e.target.value)}
+                          className="mt-2 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Bitiş Tarih/Saat</label>
+                        <input
+                          type="datetime-local"
+                          value={manualEnd}
+                          onChange={(e) => setManualEnd(e.target.value)}
+                          className="mt-2 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Bakım Personeli Seçimi */}
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Bakım Personeli</label>
+                    <select
+                      multiple
+                      value={selectedPersonnel.map(p => String(p.id))}
+                      onChange={(e) => {
+                        const selected = Array.from(e.target.selectedOptions, option => 
+                          maintenancePersonnel.find(p => String(p.id) === option.value)
+                        ).filter(Boolean);
+                        setSelectedPersonnel(selected);
+                      }}
+                      className="mt-2 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm min-h-[80px]"
+                      size={3}
+                    >
+                      {maintenancePersonnel.map((p) => (
+                        <option key={p.id} value={String(p.id)}>
+                          {p.username} {p.roleDisplayName ? `(${p.roleDisplayName})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                      Çoklu seçim için Ctrl (Windows) veya Cmd (Mac) tuşuna basılı tutun
+                    </p>
+                  </div>
+                </div>
+              )}
+              
               <button
                 onClick={(e) => { handleSubmit(e); setShowDrawer(false); }}
                 className="w-full px-4 py-3 rounded-md bg-emerald-600 text-white text-sm font-semibold shadow-lg shadow-emerald-500/30"
@@ -1257,7 +1662,7 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
         </div>
       )}
 
-      {activeSubTab === "reports" && (
+      {getAllowedSubTabs.includes("reports") && activeSubTab === "reports" && (
         <div className="bg-white dark:bg-slate-900/60 rounded-xl border border-gray-200 dark:border-gray-700 p-4 shadow-sm space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
             <select className="rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm">
@@ -1314,11 +1719,11 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
         </div>
       )}
 
-      {activeSubTab === "admin" && (
+      {getAllowedSubTabs.includes("admin") && activeSubTab === "admin" && (
         <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-4">
           {/* Left: Machine groups only */}
-          <div className="bg-slate-900/70 dark:bg-slate-900/80 rounded-2xl border border-slate-700 shadow-lg p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-50 flex items-center gap-2">
+          <div className="bg-white dark:bg-slate-900/80 rounded-2xl border border-gray-300 dark:border-slate-700 shadow-lg p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-2">
               <PenLine className="w-4 h-4 text-sky-400" /> Makine Grupları
             </h3>
             <div className="space-y-1 max-h-[60vh] overflow-auto pr-1 no-scrollbar">
@@ -1328,9 +1733,21 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                   className={`flex items-center justify-between px-3 py-1.5 rounded-xl text-sm cursor-pointer transition ${
                     selectedGroupId === g.id
                       ? "bg-sky-600/90 text-white shadow-sm shadow-sky-500/40"
-                      : "bg-slate-800/60 text-slate-100 hover:bg-slate-700/80"
+                      : "bg-gray-100 dark:bg-slate-800/60 text-gray-900 dark:text-slate-100 hover:bg-gray-200 dark:hover:bg-slate-700/80"
                   }`}
-                  onClick={() => setSelectedGroupId(g.id)}
+                  onClick={() => {
+                    if (selectedGroupId === g.id) {
+                      // Aynı gruba tekrar tıklanırsa seçimi kaldır
+                      setSelectedGroupId(null);
+                      setSelectedMachineForOperators(null);
+                      setSelectedCategoryAdminId(null);
+                    } else {
+                      // Yeni grup seçilirse, önceki seçimleri sıfırla
+                      setSelectedGroupId(g.id);
+                      setSelectedMachineForOperators(null);
+                      setSelectedCategoryAdminId(null);
+                    }
+                  }}
                 >
                   <span className="truncate">{g.name}</span>
                   <button
@@ -1346,14 +1763,23 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                 </div>
               ))}
               {machineGroups.length === 0 && (
-                <div className="text-xs text-slate-300">Henüz grup yok</div>
+                <div className="text-xs text-gray-500 dark:text-slate-300">Henüz grup yok</div>
               )}
             </div>
-            <div className="flex gap-2 pt-3 border-t border-slate-700/70 mt-2">
+            <div className="flex gap-2 pt-3 border-t border-gray-300 dark:border-slate-700/70 mt-2">
               <input
                 id="new-machine-group-input"
-                className="flex-1 rounded-lg border border-slate-600 bg-slate-800/80 text-slate-100 px-3 py-1.5 text-xs placeholder-slate-400"
+                className="flex-1 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800/80 text-gray-900 dark:text-slate-100 px-3 py-1.5 text-xs placeholder-gray-500 dark:placeholder-slate-400"
                 placeholder="Yeni makine grubu"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const el = document.getElementById("new-machine-group-input");
+                    const val = el?.value?.trim();
+                    if (!val) return;
+                    handleAddMachineGroup(val);
+                    el.value = "";
+                  }
+                }}
               />
               <button
                 type="button"
@@ -1372,38 +1798,41 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
           </div>
 
           {/* Right: Detail panel (only if a group is selected) */}
-          <div className="bg-slate-900/60 dark:bg-slate-900/80 rounded-2xl border border-slate-700 shadow-lg p-4 space-y-4">
+          <div>
             {!selectedGroupId && (
-              <div className="h-full flex items-center justify-center text-slate-300 text-sm">
+              <div className="h-full flex items-center justify-center text-gray-600 dark:text-slate-300 text-sm">
                 Lütfen soldan bir <strong className="mx-1">makine grubu</strong> seçin.
               </div>
             )}
 
             {selectedGroupId && (
               <>
-                {/* Machines & operators */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs max-h-[28vh]">
-                  {/* Machines */}
-                  <div className="bg-slate-900/80 border border-slate-700 rounded-xl p-3 flex flex-col">
+                {/* Üst satır: Makineler → Operatörler (soldan sağa) */}
+                <div className="flex gap-4 text-xs relative z-10 flex-wrap">
+                  {/* Machines - Always shown when group is selected */}
+                  <div className="bg-white dark:bg-slate-900/80 border border-gray-300 dark:border-slate-700 rounded-xl p-3 flex flex-col h-[32vh] min-h-[300px] flex-1 min-w-[280px] max-w-[400px] animate-fadeInUp">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-slate-100 font-semibold flex items-center gap-2">
+                      <span className="text-gray-900 dark:text-slate-100 font-semibold flex items-center gap-2">
                         <PenLine className="w-4 h-4 text-emerald-400" /> Makineler
                       </span>
                       {isLoadingLookups && (
-                        <span className="text-[11px] text-slate-400">Yükleniyor...</span>
+                        <span className="text-[11px] text-gray-500 dark:text-slate-400">Yükleniyor...</span>
                       )}
                     </div>
                     <div className="space-y-1.5 overflow-auto no-scrollbar flex-1 pr-1">
-                      {groupMachines.map((m) => {
+                      {groupMachines.map((m, index) => {
                         const isSel = selectedMachineForOperators === m.id;
                         return (
                           <div
                             key={m.id}
-                            className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition ${
+                            className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition-all duration-300 ease-out ${
                               isSel
                                 ? "bg-emerald-500/90 text-white shadow-sm shadow-emerald-500/40"
-                                : "bg-slate-800/80 text-slate-100 hover:bg-slate-700/80"
+                                : "bg-gray-100 dark:bg-slate-800/80 text-gray-900 dark:text-slate-100 hover:bg-gray-200 dark:hover:bg-slate-700/80"
                             }`}
+                            style={{
+                              animation: `fadeInUp 0.3s ease-out ${index * 0.05}s both`
+                            }}
                             onClick={() => handleSelectMachineForOperators(isSel ? null : m.id)}
                           >
                             <span className="truncate">{m.name}</span>
@@ -1421,14 +1850,23 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                         );
                       })}
                       {groupMachines.length === 0 && (
-                        <div className="text-slate-400 text-xs">Bu grupta makine yok</div>
+                        <div className="text-gray-500 dark:text-slate-400 text-xs">Bu grupta makine yok</div>
                       )}
                     </div>
-                    <div className="flex gap-2 pt-2 border-t border-slate-700/70 mt-2">
+                    <div className="flex gap-2 pt-2 border-t border-gray-300 dark:border-slate-700/70 mt-2">
                       <input
                         id="new-machine-input"
-                        className="flex-1 rounded-lg border border-slate-600 bg-slate-800/80 text-slate-100 px-2.5 py-1.5 text-xs placeholder-slate-500"
+                        className="flex-1 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800/80 text-gray-900 dark:text-slate-100 px-2.5 py-1.5 text-xs placeholder-gray-500 dark:placeholder-slate-500"
                         placeholder="Makine ekle"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            const el = document.getElementById("new-machine-input");
+                            const val = el?.value?.trim();
+                            if (!val) return;
+                            handleAddMachine(val);
+                            el.value = "";
+                          }
+                        }}
                       />
                       <button
                         type="button"
@@ -1446,18 +1884,22 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                     </div>
                   </div>
 
-                  {/* Operators */}
-                  <div className="bg-slate-900/80 border border-slate-700 rounded-xl p-3 flex flex-col">
+                  {/* Operators - Only shown when machine is selected */}
+                  {selectedMachineForOperators && (
+                    <div className="bg-white dark:bg-slate-900/80 border border-gray-300 dark:border-slate-700 rounded-xl p-3 flex flex-col h-[32vh] min-h-[300px] flex-1 min-w-[280px] max-w-[400px] animate-fadeInUp">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-slate-100 font-semibold flex items-center gap-2">
+                      <span className="text-gray-900 dark:text-slate-100 font-semibold flex items-center gap-2">
                         <Users className="w-4 h-4 text-indigo-400" /> Operatörler
                       </span>
                     </div>
                     <div className="space-y-1.5 overflow-auto no-scrollbar flex-1 pr-1">
-                      {machineOperators.map((o) => (
+                      {machineOperators.map((o, index) => (
                         <div
                           key={o.id}
-                          className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-slate-800/80 text-slate-100 hover:bg-slate-700/80 transition"
+                          className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-slate-800/80 text-gray-900 dark:text-slate-100 hover:bg-gray-200 dark:hover:bg-slate-700/80 transition-all duration-300 ease-out"
+                          style={{
+                            animation: `fadeInUp 0.3s ease-out ${index * 0.05}s both`
+                          }}
                         >
                           <span className="truncate">{o.name}</span>
                           <button
@@ -1470,19 +1912,28 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                         </div>
                       ))}
                       {selectedMachineForOperators && machineOperators.length === 0 && (
-                        <div className="text-slate-400 text-xs">Bu makine için operatör yok</div>
+                        <div className="text-gray-500 dark:text-slate-400 text-xs">Bu makine için operatör yok</div>
                       )}
                       {!selectedMachineForOperators && (
-                        <div className="text-slate-500 text-xs">
+                        <div className="text-gray-500 dark:text-slate-500 text-xs">
                           Önce yukarıdan bir <strong className="mx-1">makine</strong> seçin.
                         </div>
                       )}
                     </div>
-                    <div className="flex gap-2 pt-2 border-t border-slate-700/70 mt-2">
+                    <div className="flex gap-2 pt-2 border-t border-gray-300 dark:border-slate-700/70 mt-2">
                       <input
                         id="new-operator-input"
-                        className="flex-1 rounded-lg border border-slate-600 bg-slate-800/80 text-slate-100 px-2.5 py-1.5 text-xs placeholder-slate-500"
+                        className="flex-1 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800/80 text-gray-900 dark:text-slate-100 px-2.5 py-1.5 text-xs placeholder-gray-500 dark:placeholder-slate-500"
                         placeholder="Operatör ekle"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && selectedMachineForOperators) {
+                            const el = document.getElementById("new-operator-input");
+                            const val = el?.value?.trim();
+                            if (!val) return;
+                            handleAddOperator(val);
+                            el.value = "";
+                          }
+                        }}
                       />
                       <button
                         type="button"
@@ -1499,29 +1950,33 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                         Ekle
                       </button>
                     </div>
-                  </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Categories & causes, same master-detail mantığı */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs max-h-[28vh]">
-                  {/* Categories */}
-                  <div className="bg-slate-900/80 border border-slate-700 rounded-xl p-3 flex flex-col">
+                {/* Alt satır: Kategoriler → Sebepler (soldan sağa) */}
+                <div className="flex gap-4 text-xs relative z-20 mt-4 flex-wrap">
+                  {/* Categories - Always shown when group is selected */}
+                  <div className="bg-white dark:bg-slate-900/80 border border-gray-300 dark:border-slate-700 rounded-xl p-3 flex flex-col h-[32vh] min-h-[300px] flex-1 min-w-[280px] max-w-[400px] animate-fadeInUp">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-slate-100 font-semibold flex items-center gap-2">
+                      <span className="text-gray-900 dark:text-slate-100 font-semibold flex items-center gap-2">
                         <PenLine className="w-4 h-4 text-amber-400" /> Kategoriler
                       </span>
                     </div>
                     <div className="space-y-1.5 overflow-auto no-scrollbar flex-1 pr-1">
-                      {groupCategories.map((c) => {
+                      {groupCategories.map((c, index) => {
                         const isSel = selectedCategoryAdminId === c.id;
                         return (
                           <div
                             key={c.id}
-                            className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition ${
+                            className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition-all duration-300 ease-out ${
                               isSel
-                                ? "bg-amber-500/90 text-slate-900 shadow-sm shadow-amber-500/40"
-                                : "bg-slate-800/80 text-slate-100 hover:bg-slate-700/80"
+                                ? "bg-amber-500/90 text-gray-900 dark:text-slate-900 shadow-sm shadow-amber-500/40"
+                                : "bg-gray-100 dark:bg-slate-800/80 text-gray-900 dark:text-slate-100 hover:bg-gray-200 dark:hover:bg-slate-700/80"
                             }`}
+                            style={{
+                              animation: `fadeInUp 0.3s ease-out ${index * 0.05}s both`
+                            }}
                             onClick={() => setSelectedCategoryAdminId(isSel ? null : c.id)}
                           >
                             <span className="truncate">{c.name}</span>
@@ -1539,14 +1994,23 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                         );
                       })}
                       {groupCategories.length === 0 && (
-                        <div className="text-slate-400 text-xs">Bu grupta kategori yok</div>
+                        <div className="text-gray-500 dark:text-slate-400 text-xs">Bu grupta kategori yok</div>
                       )}
                     </div>
-                    <div className="flex gap-2 pt-2 border-t border-slate-700/70 mt-2">
+                    <div className="flex gap-2 pt-2 border-t border-gray-300 dark:border-slate-700/70 mt-2">
                       <input
                         id="new-category-input"
-                        className="flex-1 rounded-lg border border-slate-600 bg-slate-800/80 text-slate-100 px-2.5 py-1.5 text-xs placeholder-slate-500"
+                        className="flex-1 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800/80 text-gray-900 dark:text-slate-100 px-2.5 py-1.5 text-xs placeholder-gray-500 dark:placeholder-slate-500"
                         placeholder="Kategori ekle"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            const el = document.getElementById("new-category-input");
+                            const val = el?.value?.trim();
+                            if (!val) return;
+                            handleAddCategory(val);
+                            el.value = "";
+                          }
+                        }}
                       />
                       <button
                         type="button"
@@ -1557,27 +2021,31 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                           handleAddCategory(val);
                           el.value = "";
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs font-semibold shadow-md shadow-amber-500/40"
+                        className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-gray-900 dark:text-slate-900 text-xs font-semibold shadow-md shadow-amber-500/40"
                       >
                         Ekle
                       </button>
                     </div>
                   </div>
 
-                  {/* Causes */}
-                  <div className="bg-slate-900/80 border border-slate-700 rounded-xl p-3 flex flex-col">
+                  {/* Causes - Only shown when category is selected */}
+                  {selectedCategoryAdminId && (
+                    <div className="bg-white dark:bg-slate-900/80 border border-gray-300 dark:border-slate-700 rounded-xl p-3 flex flex-col h-[32vh] min-h-[300px] flex-1 min-w-[280px] max-w-[400px] animate-fadeInUp">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-slate-100 font-semibold flex items-center gap-2">
+                      <span className="text-gray-900 dark:text-slate-100 font-semibold flex items-center gap-2">
                         <PenLine className="w-4 h-4 text-rose-400" /> Sebepler
                       </span>
                     </div>
                     <div className="space-y-1.5 overflow-auto no-scrollbar flex-1 pr-1">
                       {groupCauses
                         .filter((c) => !selectedCategoryAdminId || c.categoryId === selectedCategoryAdminId)
-                        .map((c) => (
+                        .map((c, index) => (
                           <div
                             key={c.id}
-                            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-slate-800/80 text-slate-100 hover:bg-slate-700/80 transition"
+                            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-slate-800/80 text-gray-900 dark:text-slate-100 hover:bg-gray-200 dark:hover:bg-slate-700/80 transition-all duration-300 ease-out"
+                            style={{
+                              animation: `fadeInUp 0.3s ease-out ${index * 0.05}s both`
+                            }}
                           >
                             <span className="truncate">{c.name}</span>
                             <button
@@ -1590,19 +2058,28 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                           </div>
                         ))}
                       {selectedCategoryAdminId && !groupCauses.some((c) => c.categoryId === selectedCategoryAdminId) && (
-                        <div className="text-slate-400 text-xs">Bu kategori için sebep yok</div>
+                        <div className="text-gray-500 dark:text-slate-400 text-xs">Bu kategori için sebep yok</div>
                       )}
                       {!selectedCategoryAdminId && (
-                        <div className="text-slate-500 text-xs">
+                        <div className="text-gray-500 dark:text-slate-500 text-xs">
                           Önce yukarıdan bir <strong className="mx-1">kategori</strong> seçin.
                         </div>
                       )}
                     </div>
-                    <div className="flex gap-2 pt-2 border-t border-slate-700/70 mt-2">
+                    <div className="flex gap-2 pt-2 border-t border-gray-300 dark:border-slate-700/70 mt-2">
                       <input
                         id="new-cause-input"
-                        className="flex-1 rounded-lg border border-slate-600 bg-slate-800/80 text-slate-100 px-2.5 py-1.5 text-xs placeholder-slate-500"
+                        className="flex-1 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800/80 text-gray-900 dark:text-slate-100 px-2.5 py-1.5 text-xs placeholder-gray-500 dark:placeholder-slate-500"
                         placeholder="Sebep ekle"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && selectedCategoryAdminId) {
+                            const el = document.getElementById("new-cause-input");
+                            const val = el?.value?.trim();
+                            if (!val) return;
+                            handleAddCause(val);
+                            el.value = "";
+                          }
+                        }}
                       />
                       <button
                         type="button"
@@ -1619,7 +2096,8 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                         Ekle
                       </button>
                     </div>
-                  </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -1675,12 +2153,7 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                       setEditCategoryId(val);
                       setEditCauseId(null);
                     }}
-                    disabled={editingRecord && !!editingRecord.end}
-                    className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-sm ${
-                      editingRecord && !!editingRecord.end
-                        ? "opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-900"
-                        : ""
-                    }`}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-sm"
                   >
                     <option value="">{getTranslation("select", currentLanguage) || "Seçin"}</option>
                     {allCategories
@@ -1702,12 +2175,7 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                       const val = e.target.value ? Number(e.target.value) : null;
                       setEditCauseId(val);
                     }}
-                    disabled={editingRecord && !!editingRecord.end}
-                    className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-sm ${
-                      editingRecord && !!editingRecord.end
-                        ? "opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-900"
-                        : ""
-                    }`}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-sm"
                   >
                     <option value="">{getTranslation("select", currentLanguage) || "Seçin"}</option>
                     {allCauses
@@ -1920,15 +2388,15 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
 
       {confirmDelete.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl max-w-md w-full p-4 space-y-3">
-            <h4 className="text-base font-semibold text-slate-50">Silme Onayı</h4>
-            <p className="text-sm text-slate-200">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 shadow-2xl max-w-md w-full p-4 space-y-3">
+            <h4 className="text-base font-semibold text-gray-900 dark:text-slate-50">Silme Onayı</h4>
+            <p className="text-sm text-gray-700 dark:text-slate-200">
               <strong>{confirmDelete.name || "Bu kayıt"}</strong> silinecek. Devam etmek istiyor musun?
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setConfirmDelete({ open: false, type: "", id: null, name: "" })}
-                className="px-4 py-2 rounded-md border border-slate-600 text-sm text-slate-200 hover:bg-slate-800"
+                className="px-4 py-2 rounded-md border border-gray-300 dark:border-slate-600 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800"
               >
                 İptal
               </button>
@@ -1947,4 +2415,33 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
 }
 
 export default MaintenanceManualPage;
+
+// CSS Animations için style tag ekle
+if (typeof document !== 'undefined') {
+  const styleId = 'maintenance-manual-animations';
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .animate-pulse-subtle {
+        animation: pulse-subtle 3s ease-in-out infinite;
+      }
+      
+      .animate-fadeInUp {
+        animation: fadeInUp 0.4s ease-out;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+}
 

@@ -10,6 +10,9 @@ using Google.Apis.Auth.OAuth2;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Windows Service desteği
+builder.Host.UseWindowsService();
+
 // Firebase Admin SDK'yı başlat
 var firebaseServiceAccountPath = builder.Configuration["Firebase:ServiceAccountPath"];
 if (string.IsNullOrEmpty(firebaseServiceAccountPath))
@@ -155,6 +158,20 @@ app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Request logging middleware - Tüm istekleri logla (geliştirme için)
+var logger = app.Services.GetRequiredService<ILogger<Program>>();
+app.Use(async (context, next) =>
+{
+    // DELETE isteklerini özellikle logla
+    if (context.Request.Method == "DELETE" && context.Request.Path.Value?.Contains("/maintenance/records") == true)
+    {
+        logger.LogInformation($"[MIDDLEWARE] DELETE isteği geldi: {context.Request.Method} {context.Request.Path}");
+        logger.LogInformation($"[MIDDLEWARE] QueryString: {context.Request.QueryString}");
+        logger.LogInformation($"[MIDDLEWARE] Headers: Authorization={context.Request.Headers.ContainsKey("Authorization")}");
+    }
+    await next();
+});
 
 app.MapControllers();
 

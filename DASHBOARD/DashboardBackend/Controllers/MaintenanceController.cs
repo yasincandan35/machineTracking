@@ -362,17 +362,53 @@ namespace DashboardBackend.Controllers
         [HttpGet("maintenance-personnel")]
         public async Task<ActionResult<IEnumerable<object>>> GetMaintenancePersonnel()
         {
-            // Bakım personeli: maintenance veya engineer rolüne sahip kullanıcılar
-            var personnel = await _context.Users
-                .Where(u => u.IsActive && (u.Role == "maintenance" || u.Role == "engineer"))
-                .Select(u => new
-                {
-                    id = u.Id,
-                    username = u.Username,
-                    email = u.Email,
-                    role = u.Role
-                })
+            // Bakım personeli: maintenanceStaff, maintenanceEngineer, maintenanceManager rolleri
+            // Önce tüm aktif kullanıcıları ve RoleSettings'i çek
+            var allUsers = await _context.Users
+                .Where(u => u.IsActive)
                 .ToListAsync();
+            
+            var allRoleSettings = await _context.RoleSettings
+                .ToListAsync();
+            
+            // Memory'de filtrele (case-insensitive)
+            var maintenanceRoleNames = new[] { "maintenancestaff", "maintenanceengineer", "maintenancemanager", "maintenance" };
+            var personnel = allUsers
+                .Where(u => maintenanceRoleNames.Any(rn => rn.Equals(u.Role, StringComparison.OrdinalIgnoreCase)))
+                .Select(u => {
+                    var roleLower = u.Role.ToLowerInvariant();
+                    string? displayName = null;
+                    
+                    // RoleSettings'ten display name al (memory'de)
+                    var roleSetting = allRoleSettings
+                        .FirstOrDefault(rs => rs.Name.ToLowerInvariant() == roleLower);
+                    if (roleSetting != null)
+                    {
+                        displayName = roleSetting.DisplayName;
+                    }
+                    else
+                    {
+                        // Fallback display name
+                        displayName = roleLower switch
+                        {
+                            "maintenancestaff" => "Bakım Personeli",
+                            "maintenanceengineer" => "Bakım Mühendisi",
+                            "maintenancemanager" => "Bakım Müdürü",
+                            "maintenance" => "Bakım",
+                            _ => null
+                        };
+                    }
+                    
+                    return new
+                    {
+                        id = u.Id,
+                        username = u.Username,
+                        email = u.Email,
+                        role = u.Role,
+                        roleDisplayName = displayName
+                    };
+                })
+                .ToList();
 
             return Ok(personnel);
         }
