@@ -3,6 +3,7 @@ import { getTranslation } from "../utils/translations";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../utils/api";
 import ElectricBorder from "../components/ElectricBorder";
+import PhotoEditorModal from "../components/PhotoEditorModal";
 import {
   Camera,
   CheckCircle2,
@@ -174,6 +175,8 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
   const [editNote, setEditNote] = useState("");
   const [editPhotos, setEditPhotos] = useState([]); // Array of { id, preview, annotated, canvasRef, imageRef, isDrawing }
   const [editMaterials, setEditMaterials] = useState([]);
+  const [editingPhoto, setEditingPhoto] = useState(null); // Photo being edited in modal
+  const [isPhotoEditorOpen, setIsPhotoEditorOpen] = useState(false);
 
   const summary = useMemo(() => {
     const total = entries.length;
@@ -300,7 +303,7 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
         causeId: j.causeId,
         operatorId: j.operatorId,
         machineGroupId: j.machineGroupId,
-        photoData: j.photoData ? "exists" : null, // Backend'den "exists" geliyor, RAM tasarrufu
+        photoData: j.photoData || null, // Backend'den full data geliyor (JSON string veya base64)
         materialsJson: j.materialsJson,
         hasPhoto: !!j.photoData,
         hasNote: !!(j.notes && j.notes?.trim()),
@@ -711,6 +714,15 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
     setEditPhotos((prev) => prev.map((p) => 
       p.id === photoId ? { ...p, annotated: dataUrl } : p
     ));
+  };
+
+  const handlePhotoEditorSave = (dataUrl) => {
+    if (!editingPhoto) return;
+    setEditPhotos((prev) => prev.map((p) => 
+      p.id === editingPhoto.id ? { ...p, annotated: dataUrl } : p
+    ));
+    setEditingPhoto(null);
+    setIsPhotoEditorOpen(false);
   };
 
   const removeEditPhoto = (photoId) => {
@@ -1368,46 +1380,75 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                     <div className="mt-2 flex flex-wrap gap-1">
                       <button
                         onClick={() => {
+                          // Önce drawer'ı aç, sonra data'yı yükle (daha hızlı görünüm)
                           setEditingRecord(e);
                           setEditNote(e.note || "");
-                          // Parse photos from JSON array or single string
-                          try {
-                            let photosData = [];
-                            if (e.photoData) {
-                              try {
-                                photosData = JSON.parse(e.photoData);
-                                if (!Array.isArray(photosData)) photosData = [photosData];
-                              } catch {
-                                photosData = [e.photoData]; // Single photo as string
-                              }
-                            }
-                            setEditPhotos(photosData.map((photoData) => ({
-                              id: generateId(),
-                              preview: photoData,
-                              annotated: photoData,
-                              file: null,
-                              isDrawing: false
-                            })));
-                          } catch {
-                            setEditPhotos([]);
-                          }
-                          // Parse materials from JSON if exists
-                          try {
-                            const materials = e.materialsJson ? JSON.parse(e.materialsJson) : [];
-                            setEditMaterials(
-                              Array.isArray(materials)
-                                ? materials.map((m) => ({
-                                    // Backend JSON alanları Name / Quantity / Unit / Note
-                                    name: m.name || m.Name || "",
-                                    quantity: m.quantity || m.Quantity || "",
-                                  }))
-                                : []
-                            );
-                          } catch {
-                            setEditMaterials([]);
-                          }
                           setEditCategoryId(e.categoryId || null);
                           setEditCauseId(e.causeId || null);
+                          
+                          // Photo ve material parsing'i async yap (non-blocking)
+                          requestAnimationFrame(() => {
+                            // Parse photos from JSON array or single string
+                            try {
+                              let photosData = [];
+                              if (e.photoData && e.photoData !== "exists") {
+                                try {
+                                  // Try to parse as JSON array
+                                  const parsed = JSON.parse(e.photoData);
+                                  if (Array.isArray(parsed)) {
+                                    photosData = parsed;
+                                  } else if (typeof parsed === 'string') {
+                                    photosData = [parsed];
+                                  } else {
+                                    photosData = [e.photoData];
+                                  }
+                                } catch {
+                                  // Not JSON, treat as single base64 string
+                                  photosData = [e.photoData];
+                                }
+                              }
+                              // Ensure photoData is valid base64 string or URL
+                              setEditPhotos(photosData
+                                .filter(photoData => photoData && typeof photoData === 'string' && (
+                                  photoData.startsWith('data:image') || 
+                                  photoData.startsWith('/uploads') ||
+                                  photoData.startsWith('http')
+                                ))
+                                .map((photoData) => {
+                                  // If it's a relative path, convert to full URL
+                                  let preview = photoData;
+                                  if (photoData.startsWith('/uploads')) {
+                                    preview = `http://192.168.1.44:5199${photoData}`;
+                                  }
+                                  return {
+                                    id: generateId(),
+                                    preview: preview,
+                                    annotated: preview, // Start with same as preview
+                                    file: null,
+                                    isDrawing: false
+                                  };
+                                }));
+                            } catch (err) {
+                              console.warn("Photo parse error:", err);
+                              setEditPhotos([]);
+                            }
+                            
+                            // Parse materials from JSON if exists
+                            try {
+                              const materials = e.materialsJson ? JSON.parse(e.materialsJson) : [];
+                              setEditMaterials(
+                                Array.isArray(materials)
+                                  ? materials.map((m) => ({
+                                      // Backend JSON alanları Name / Quantity / Unit / Note
+                                      name: m.name || m.Name || "",
+                                      quantity: m.quantity || m.Quantity || "",
+                                    }))
+                                  : []
+                              );
+                            } catch {
+                              setEditMaterials([]);
+                            }
+                          });
                         }}
                         className="flex-1 text-xs px-2 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 flex items-center justify-center gap-1.5 transition"
                       >
@@ -1447,7 +1488,10 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                 </div>
               );
               
-              return !isCompleted ? (
+              // Mobilde electric border'ı devre dışı bırak (performans için)
+              const isMobile = window.innerWidth < 768;
+              
+              return !isCompleted && !isMobile ? (
                 <ElectricBorder
                   key={e.id}
                   color={e.type === "fault" ? "#fb7185" : "#34d399"}
@@ -2232,70 +2276,22 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
                       <div key={photo.id} className="space-y-2">
                         <div className="relative border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
                           <img
-                            ref={(el) => {
-                              if (imageRef) imageRef.current = el;
-                              // Initialize canvas when image is loaded
-                              if (el && canvasRef && canvasRef.current) {
-                                const handleLoad = () => {
-                                  const canvas = canvasRef.current;
-                                  if (canvas && typeof canvas.getContext === "function") {
-                                    try {
-                                      canvas.width = el.naturalWidth || el.width || 800;
-                                      canvas.height = el.naturalHeight || el.height || 600;
-                                      const ctx = canvas.getContext("2d");
-                                      ctx.drawImage(el, 0, 0);
-                                    } catch (err) {
-                                      console.warn("Canvas init error:", err);
-                                    }
-                                  }
-                                };
-                                if (el.complete && el.naturalWidth > 0) {
-                                  handleLoad();
-                                } else {
-                                  el.onload = handleLoad;
-                                }
-                              }
-                            }}
                             src={photo.annotated || photo.preview}
                             alt="Preview"
-                            className="w-full h-auto max-h-64 object-contain"
-                          />
-                          <canvas
-                            ref={(el) => {
-                              if (canvasRef) canvasRef.current = el;
+                            className="w-full h-auto max-h-64 object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => {
+                              setEditingPhoto(photo);
+                              setIsPhotoEditorOpen(true);
                             }}
-                            onMouseDown={(e) => handleEditCanvasMouse(photo.id, canvasRef, e, "down")}
-                            onMouseMove={(e) => handleEditCanvasMouse(photo.id, canvasRef, e, "move")}
-                            onMouseUp={(e) => handleEditCanvasMouse(photo.id, canvasRef, e, "up")}
-                            className="absolute top-0 left-0 w-full h-full cursor-crosshair"
-                            style={{ pointerEvents: photo.preview ? "auto" : "none" }}
                           />
                           <button
                             type="button"
                             onClick={() => removeEditPhoto(photo.id)}
-                            className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg"
+                            className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg z-10"
                           >
                             <XCircle className="w-4 h-4" />
                           </button>
                         </div>
-                        {photo.preview && (
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleEditAddText(photo.id, canvasRef)}
-                              className="px-3 py-1.5 text-xs bg-amber-500 hover:bg-amber-400 text-white rounded-lg"
-                            >
-                              {getTranslation("addText", currentLanguage) || "Metin Ekle"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleEditSaveAnnotation(photo.id, canvasRef)}
-                              className="px-3 py-1.5 text-xs bg-blue-500 hover:bg-blue-400 text-white rounded-lg"
-                            >
-                              {getTranslation("saveAnnotation", currentLanguage) || "Çizimi Kaydet"}
-                            </button>
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -2410,6 +2406,18 @@ function MaintenanceManualPage({ currentLanguage = "tr", darkMode = false }) {
           </div>
         </div>
       )}
+
+      {/* Photo Editor Modal */}
+      <PhotoEditorModal
+        isOpen={isPhotoEditorOpen}
+        onClose={() => {
+          setIsPhotoEditorOpen(false);
+          setEditingPhoto(null);
+        }}
+        photo={editingPhoto}
+        onSave={handlePhotoEditorSave}
+        currentLanguage={currentLanguage}
+      />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { api } from "../utils/api";
 import { useAuth } from "../contexts/AuthContext";
-import { Key, Eye, EyeOff, ArrowUp, ArrowDown, ArrowUpDown, ChevronRight, ChevronDown } from "lucide-react";
+import { Key, Eye, EyeOff, ArrowUp, ArrowDown, ArrowUpDown, ChevronRight, ChevronDown, Clock, BarChart3, List, Activity } from "lucide-react";
 
 const SECTION_OPTIONS = [
   { key: "home", label: "Ana Sayfa" },
@@ -80,6 +80,8 @@ const AdminPanel = () => {
   const [activeTab, setActiveTab] = useState("users");
   const [notificationRecipients, setNotificationRecipients] = useState([]);
   const [notificationRecipientsLoading, setNotificationRecipientsLoading] = useState(false);
+  const [selectedNotificationCategory, setSelectedNotificationCategory] = useState("maintenance");
+  const [selectedRoleFilter, setSelectedRoleFilter] = useState("all");
   const [roles, setRoles] = useState([]);
   const [rolesLoading, setRolesLoading] = useState(true);
   const [rolesError, setRolesError] = useState("");
@@ -191,17 +193,12 @@ const AdminPanel = () => {
     }));
   }, [availableSections]);
   
-  // Şifre yönetimi state'leri
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState(null);
-  const [newPassword, setNewPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
 
   const { token, refreshCount } = useAuth();
 
-  // Sıralama state'leri
-  const [sortColumn, setSortColumn] = useState(null);
-  const [sortDirection, setSortDirection] = useState('asc'); // 'asc' | 'desc' | null
+  // Sıralama state'leri - varsayılan olarak online/offline + lastSeen'e göre sıralama
+  const [sortColumn, setSortColumn] = useState(null); // null = varsayılan sıralama (online önce, sonra offline, her grup içinde lastSeen)
+  const [sortDirection, setSortDirection] = useState('desc'); // 'asc' | 'desc' | null
 
   // Sıralama fonksiyonu
   const handleSort = useCallback((column) => {
@@ -257,18 +254,69 @@ const AdminPanel = () => {
       });
   }, [roles, fallbackRoleOptions]);
 
-  // Sıralanmış kullanıcı listesi (roleOptions'tan sonra tanımlanmalı)
+  // Durum göstergesi için fonksiyon (lastSeen'e göre)
+  const getUserStatus = useCallback((user) => {
+    if (!user.lastSeen) {
+      return { isOnline: false, text: "Bilinmiyor", color: "gray", icon: "⚫" };
+    }
+    
+    const now = new Date();
+    const lastSeen = new Date(user.lastSeen);
+    const ageSec = Math.floor((now.getTime() - lastSeen.getTime()) / 1000);
+    
+    // 30 saniye içindeyse online
+    if (ageSec <= 30 && ageSec >= 0) {
+      return { isOnline: true, text: "Online", color: "green", icon: "🟢" };
+    }
+    
+    return { isOnline: false, text: "Offline", color: "gray", icon: "⚫" };
+  }, []);
+
+  // Sıralanmış ve filtrelenmiş kullanıcı listesi (roleOptions'tan sonra tanımlanmalı)
   const sortedUsers = useMemo(() => {
     try {
       if (!users || !Array.isArray(users) || users.length === 0) {
         return [];
       }
       
-      if (!sortColumn) {
-        return users;
+      // Önce role göre filtrele
+      let filtered = users;
+      if (selectedRoleFilter !== "all") {
+        filtered = users.filter(user => user.role === selectedRoleFilter);
       }
 
-      const sorted = [...users].sort((a, b) => {
+      // Sonra sıralama yap
+      if (!sortColumn) {
+        // Varsayılan sıralama: Önce online/offline durumuna göre (online önce)
+        // Online olanlar: rolüne göre sıralı
+        // Offline olanlar: lastSeen'e göre azalan sıralı
+        return filtered.sort((a, b) => {
+          // Önce online/offline durumuna göre sırala (online önce)
+          const aStatus = getUserStatus(a);
+          const bStatus = getUserStatus(b);
+          
+          // Online olanlar önce gelsin
+          if (aStatus.isOnline && !bStatus.isOnline) return -1;
+          if (!aStatus.isOnline && bStatus.isOnline) return 1;
+          
+          // Aynı durumda (ikisi de online veya ikisi de offline)
+          if (aStatus.isOnline && bStatus.isOnline) {
+            // Online olanları rolüne göre sırala
+            const aRole = roleOptions.find(r => r.name === a.role);
+            const bRole = roleOptions.find(r => r.name === b.role);
+            const aRoleDisplay = aRole?.displayName || aRole?.name || a.role || '';
+            const bRoleDisplay = bRole?.displayName || bRole?.name || b.role || '';
+            return aRoleDisplay.localeCompare(bRoleDisplay, 'tr-TR', { sensitivity: 'base' });
+          } else {
+            // Offline olanları lastSeen'e göre azalan sırala
+            const aLastSeen = a.lastSeen ? new Date(a.lastSeen).getTime() : 0;
+            const bLastSeen = b.lastSeen ? new Date(b.lastSeen).getTime() : 0;
+            return bLastSeen - aLastSeen; // Azalan sıralama (en son görülen önce)
+          }
+        });
+      }
+
+      const sorted = [...filtered].sort((a, b) => {
         let aValue = a[sortColumn];
         let bValue = b[sortColumn];
 
@@ -322,7 +370,7 @@ const AdminPanel = () => {
       console.error('Sıralama hatası:', error);
       return users || [];
     }
-  }, [users, sortColumn, sortDirection, roleOptions]);
+  }, [users, sortColumn, sortDirection, roleOptions, selectedRoleFilter, getUserStatus]);
 
   // Sıralama ikonu gösterme fonksiyonu
   const getSortIcon = (column) => {
@@ -462,17 +510,31 @@ const AdminPanel = () => {
     );
   };
 
-  // Her 10 saniyede bir offline kullanıcıları kontrol et
+  // Kullanıcıları periyodik olarak backend'den yenile (canlı takip için)
   useEffect(() => {
+    if (!token || activeTab !== "users") {
+      return; // Sadece users sekmesinde ve token varsa çalış
+    }
+
+    // İlk yükleme
+    fetchUsers();
+
+    // Her saniye kullanıcıları backend'den yenile (canlı takip)
+    const refreshInterval = setInterval(() => {
+      fetchUsers();
+    }, 1000); // 1 saniye
+
+    return () => clearInterval(refreshInterval);
+  }, [token, fetchUsers, activeTab, refreshCount]); // refreshCount değişince de yeniden başlat
+
+  // Her 10 saniyede bir offline kullanıcıları kontrol et (ek güvenlik için)
+  useEffect(() => {
+    if (activeTab !== "users") {
+      return; // Sadece users sekmesinde çalış
+    }
     const interval = setInterval(markInactiveUsersOffline, 10 * 1000);
     return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (token) {
-      fetchUsers();
-    }
-  }, [token, fetchUsers, refreshCount]); // refreshCount değişince de yenile
+  }, [activeTab]);
 
   useEffect(() => {
     fetchMachines();
@@ -814,30 +876,6 @@ const AdminPanel = () => {
     }
   };
 
-  const handlePasswordReset = async () => {
-    if (!newPassword || newPassword.length < 6) {
-      alert("Şifre en az 6 karakter olmalıdır!");
-      return;
-    }
-
-    try {
-      await api.put(`/auth/users/${selectedUserId}/password`, { newPassword });
-      
-      setShowPasswordModal(false);
-      setNewPassword("");
-      setSelectedUserId(null);
-      alert("Şifre başarıyla güncellendi!");
-    } catch (err) {
-      console.error("Şifre güncelleme hatası:", err);
-      alert("Şifre güncellenemedi!");
-    }
-  };
-
-  const openPasswordModal = (userId, username) => {
-    setSelectedUserId(userId);
-    setShowPasswordModal(true);
-    setNewPassword("");
-  };
 
   return (
     <div className="w-full">
@@ -882,6 +920,17 @@ const AdminPanel = () => {
             }`}
           >
             Bildirim Yönetimi
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("user-activities")}
+            className={`px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors ${
+              activeTab === "user-activities"
+                ? "bg-red-600 text-white shadow"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
+            }`}
+          >
+            Kullanıcı Aktiviteleri
           </button>
         </div>
 
@@ -979,6 +1028,28 @@ const AdminPanel = () => {
               <p className="text-gray-700 dark:text-gray-300">Kullanıcılar yükleniyor...</p>
             ) : (
               <>
+                {/* Rol Filtreleme */}
+                <div className="mb-4 bg-white dark:bg-gray-800 p-3 sm:p-4 rounded-lg shadow">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Rol Filtrele:
+                  </label>
+                  <select
+                    value={selectedRoleFilter}
+                    onChange={(e) => setSelectedRoleFilter(e.target.value)}
+                    className="w-full sm:w-auto p-2 sm:p-3 text-sm sm:text-base rounded bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                  >
+                    <option value="all">Tüm Roller</option>
+                    {roleOptions.map((role) => (
+                      <option key={role.name} value={role.name}>
+                        {role.displayName || role.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    {sortedUsers.length} kullanıcı gösteriliyor
+                  </p>
+                </div>
+
                 <div className="hidden lg:block overflow-x-auto">
                   <table className="w-full table-auto bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow">
                     <thead className="bg-red-600">
@@ -1024,6 +1095,7 @@ const AdminPanel = () => {
                             {getSortIcon('isOnline')}
                           </div>
                         </th>
+                        <th className="px-4 py-2 text-left text-white">Sayfa/Tab</th>
                         <th 
                           className="px-4 py-2 text-left text-white cursor-pointer hover:bg-red-700 transition-colors select-none"
                           onClick={() => handleSort('createdAt')}
@@ -1064,7 +1136,6 @@ const AdminPanel = () => {
                             {getSortIcon('isActive')}
                           </div>
                         </th>
-                        <th className="px-4 py-2 text-left text-white">Şifre</th>
                         <th className="px-4 py-2 text-left text-white">İşlem</th>
                       </tr>
                     </thead>
@@ -1106,15 +1177,37 @@ const AdminPanel = () => {
                             )}
                           </td>
                           <td className="px-4 py-2 text-gray-900 dark:text-white">
-                            <span
-                              className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                user.isOnline
-                                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                                  : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
-                              }`}
-                            >
-                              {user.isOnline ? "🟢 Online" : "⚫ Offline"}
-                            </span>
+                            {(() => {
+                              const status = getUserStatus(user);
+                              return (
+                                <span
+                                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    status.isOnline
+                                      ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                      : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                  }`}
+                                  title={user.lastSeen ? `Son görülme: ${new Date(user.lastSeen).toLocaleString("tr-TR")}` : "Son görülme bilgisi yok"}
+                                >
+                                  {status.icon} {status.text}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                          <td className="px-4 py-2 text-gray-900 dark:text-white text-sm">
+                            {user.currentPage || user.CurrentPage ? (
+                              <div className="text-xs">
+                                <div className="font-medium">
+                                  {user.currentPage || user.CurrentPage}
+                                </div>
+                                {(user.currentTab || user.CurrentTab) && (
+                                  <div className="text-gray-500 dark:text-gray-400 mt-1">
+                                    Tab: {user.currentTab || user.CurrentTab}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
                           </td>
                           <td className="px-4 py-2 text-gray-900 dark:text-white text-sm">
                             {user.createdAt ? new Date(user.createdAt).toLocaleString("tr-TR") : ""}
@@ -1135,15 +1228,6 @@ const AdminPanel = () => {
                           </td>
                           <td className="px-4 py-2">
                             <button
-                              onClick={() => openPasswordModal(user.id, user.username)}
-                              className="bg-blue-500 hover:bg-blue-600 px-3 py-1 text-sm rounded text-white flex items-center gap-1"
-                            >
-                              <Key size={14} />
-                              Şifre
-                            </button>
-                          </td>
-                          <td className="px-4 py-2">
-                            <button
                               onClick={() => handleDeleteUser(user.id)}
                               className="bg-red-500 hover:bg-red-600 px-3 py-1 text-sm rounded text-white"
                             >
@@ -1154,7 +1238,7 @@ const AdminPanel = () => {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan="11" className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                          <td colSpan="12" className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                             Kullanıcı bulunamadı
                           </td>
                         </tr>
@@ -1172,15 +1256,21 @@ const AdminPanel = () => {
                           <h3 className="text-base font-semibold text-gray-900 dark:text-white">{user.username}</h3>
                           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{user.email}</p>
                         </div>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            user.isOnline
-                              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                              : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
-                          }`}
-                        >
-                          {user.isOnline ? "🟢 Online" : "⚫ Offline"}
-                        </span>
+                        {(() => {
+                          const status = getUserStatus(user);
+                          return (
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                status.isOnline
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                  : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                              }`}
+                              title={user.lastSeen ? `Son görülme: ${new Date(user.lastSeen).toLocaleString("tr-TR")}` : "Son görülme bilgisi yok"}
+                            >
+                              {status.icon} {status.text}
+                            </span>
+                          );
+                        })()}
                       </div>
 
                       <div className="space-y-2 text-sm">
@@ -1251,16 +1341,19 @@ const AdminPanel = () => {
                             </span>
                           </div>
                         )}
+
+                        {(user.currentPage || user.CurrentPage) && (
+                          <div className="flex flex-col">
+                            <span className="text-gray-600 dark:text-gray-400">Sayfa/Tab:</span>
+                            <span className="text-gray-900 dark:text-white text-xs mt-0.5">
+                              {user.currentPage || user.CurrentPage}
+                              {(user.currentTab || user.CurrentTab) && ` / ${user.currentTab || user.CurrentTab}`}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                        <button
-                          onClick={() => openPasswordModal(user.id, user.username)}
-                          className="flex-1 bg-blue-500 hover:bg-blue-600 px-3 py-2 text-sm rounded text-white flex items-center justify-center gap-1"
-                        >
-                          <Key size={14} />
-                          Şifre
-                        </button>
                         <button
                           onClick={() => handleDeleteUser(user.id)}
                           className="flex-1 bg-red-500 hover:bg-red-600 px-3 py-2 text-sm rounded text-white"
@@ -1279,7 +1372,7 @@ const AdminPanel = () => {
               </>
             )}
           </>
-        ) : (
+        ) : activeTab === "roles" ? (
           <div className="space-y-6">
             <div className="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-lg shadow">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">{editingRoleId ? "Rolü Güncelle" : "Yeni Rol Oluştur"}</h2>
@@ -1572,7 +1665,7 @@ const AdminPanel = () => {
               )}
             </div>
           </div>
-        )}
+        ) : null}
 
         {activeTab === "maintenance-notifications" && (
           <div className="space-y-6">
@@ -1686,61 +1779,432 @@ const AdminPanel = () => {
             </div>
           </div>
         )}
+
+        {activeTab === "user-activities" && (
+          <UserActivitiesTab users={users} roleOptions={roleOptions} />
+        )}
       </div>
 
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 sm:p-6 w-full max-w-md mx-auto">
-            <h3 className="text-base sm:text-lg font-semibold mb-4 text-gray-900 dark:text-white">
-              Şifre Sıfırla
-            </h3>
-            
-            <div className="mb-4">
+    </div>
+  );
+};
+
+// User Activities Tab Component
+const UserActivitiesTab = ({ users, roleOptions }) => {
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [activityView, setActivityView] = useState('timeline'); // 'timeline', 'statistics', 'logs'
+  const [logs, setLogs] = useState([]);
+  const [statistics, setStatistics] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [startDate, setStartDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 7); // Son 7 gün
+    return date.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
+
+  const selectedUser = useMemo(() => {
+    return users.find(u => u.id === selectedUserId);
+  }, [users, selectedUserId]);
+
+  // Logları yükle
+  const fetchLogs = useCallback(async () => {
+    if (!selectedUserId) return;
+    setLoading(true);
+    try {
+      const response = await api.get(`/activitylog/user/${selectedUserId}/timeline`, {
+        params: {
+          startDate: startDate ? new Date(startDate).toISOString() : null,
+          endDate: endDate ? new Date(endDate + 'T23:59:59').toISOString() : null,
+          limit: 1000
+        }
+      });
+      setLogs(response.data || []);
+    } catch (err) {
+      console.error("Loglar yüklenemedi:", err);
+      setLogs([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedUserId, startDate, endDate]);
+
+  // İstatistikleri yükle
+  const fetchStatistics = useCallback(async () => {
+    if (!selectedUserId) return;
+    setLoading(true);
+    try {
+      const response = await api.get(`/activitylog/user/${selectedUserId}/statistics`, {
+        params: {
+          startDate: startDate ? new Date(startDate).toISOString() : null,
+          endDate: endDate ? new Date(endDate + 'T23:59:59').toISOString() : null
+        }
+      });
+      setStatistics(response.data);
+    } catch (err) {
+      console.error("İstatistikler yüklenemedi:", err);
+      setStatistics(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedUserId, startDate, endDate]);
+
+  useEffect(() => {
+    if (selectedUserId) {
+      if (activityView === 'timeline' || activityView === 'logs') {
+        fetchLogs();
+      } else if (activityView === 'statistics') {
+        fetchStatistics();
+      }
+    }
+  }, [selectedUserId, activityView, fetchLogs, fetchStatistics]);
+
+  const formatDuration = (seconds) => {
+    if (!seconds) return '0 sn';
+    if (seconds < 60) return `${seconds} sn`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} dk`;
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return `${hours} saat ${minutes} dk`;
+  };
+
+  const getEventTypeLabel = (eventType) => {
+    const labels = {
+      'page_view': 'Sayfa Görüntülendi',
+      'tab_change': 'Tab Değişti',
+      'subtab_change': 'Alt Tab Değişti',
+      'machine_selected': 'Makine Seçildi',
+      'action': 'Aksiyon',
+      'time_spent': 'Süre Geçti'
+    };
+    return labels[eventType] || eventType;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-lg shadow">
+        <h2 className="text-lg sm:text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+          Kullanıcı Aktiviteleri
+        </h2>
+
+        {/* Kullanıcı Seçimi */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Kullanıcı Seçin
+          </label>
+          <select
+            value={selectedUserId || ''}
+            onChange={(e) => setSelectedUserId(e.target.value ? parseInt(e.target.value) : null)}
+            className="w-full sm:w-auto p-2 sm:p-3 text-sm sm:text-base rounded bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+          >
+            <option value="">Kullanıcı seçin...</option>
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.username} ({roleOptions.find(r => r.name === user.role)?.displayName || user.role})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Tarih Aralığı */}
+        {selectedUserId && (
+          <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Yeni Şifre:
+                Başlangıç Tarihi
               </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full p-2 sm:p-3 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white pr-10"
-                  placeholder="En az 6 karakter"
-                  minLength={6}
-                  autoComplete="new-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full p-2 rounded bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Bitiş Tarihi
+              </label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full p-2 rounded bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Görünüm Seçimi */}
+        {selectedUserId && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            <button
+              type="button"
+              onClick={() => setActivityView('timeline')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                activityView === 'timeline'
+                  ? "bg-red-600 text-white shadow"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
+              }`}
+            >
+              <Clock className="w-4 h-4" />
+              Zaman Çizelgesi
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivityView('statistics')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                activityView === 'statistics'
+                  ? "bg-red-600 text-white shadow"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              İstatistikler
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivityView('logs')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                activityView === 'logs'
+                  ? "bg-red-600 text-white shadow"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
+              }`}
+            >
+              <List className="w-4 h-4" />
+              Detaylı Loglar
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* İçerik */}
+      {selectedUserId && (
+        <div className="bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-lg shadow">
+          {loading ? (
+            <p className="text-gray-700 dark:text-gray-300">Yükleniyor...</p>
+          ) : activityView === 'timeline' ? (
+            <TimelineView logs={logs} formatDuration={formatDuration} getEventTypeLabel={getEventTypeLabel} selectedUser={selectedUser} />
+          ) : activityView === 'statistics' ? (
+            <StatisticsView statistics={statistics} formatDuration={formatDuration} />
+          ) : (
+            <LogsView logs={logs} formatDuration={formatDuration} getEventTypeLabel={getEventTypeLabel} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Timeline View Component
+const TimelineView = ({ logs, formatDuration, getEventTypeLabel, selectedUser }) => {
+  if (!logs || logs.length === 0) {
+    return <p className="text-gray-500 dark:text-gray-400">Henüz aktivite logu bulunmuyor.</p>;
+  }
+
+  return (
+    <div>
+      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+        {selectedUser?.username} - Aktivite Zaman Çizelgesi
+      </h3>
+      <div className="space-y-4">
+        {logs.map((log, index) => (
+          <div key={log.id || index} className="border-l-4 border-red-600 pl-4 py-2">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {getEventTypeLabel(log.eventType)}
+                  </span>
+                  {log.duration && (
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      ({formatDuration(log.duration)})
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  {log.page && <span>Sayfa: {log.page}</span>}
+                  {log.tab && <span className="ml-2">Tab: {log.tab}</span>}
+                  {log.subTab && <span className="ml-2">Alt Tab: {log.subTab}</span>}
+                  {log.machineName && <span className="ml-2">Makine: {log.machineName}</span>}
+                  {log.action && <span className="ml-2">Aksiyon: {log.action}</span>}
+                </div>
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                {new Date(log.timestamp).toLocaleString('tr-TR')}
               </div>
             </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:justify-end">
-              <button
-                onClick={() => {
-                  setShowPasswordModal(false);
-                  setNewPassword("");
-                  setSelectedUserId(null);
-                }}
-                className="w-full sm:w-auto px-4 py-2 text-sm sm:text-base bg-gray-500 hover:bg-gray-600 text-white rounded"
-              >
-                İptal
-              </button>
-              <button
-                onClick={handlePasswordReset}
-                disabled={!newPassword || newPassword.length < 6}
-                className="w-full sm:w-auto px-4 py-2 text-sm sm:text-base bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded"
-              >
-                Şifre Güncelle
-              </button>
-            </div>
+// Statistics View Component
+const StatisticsView = ({ statistics, formatDuration }) => {
+  if (!statistics) {
+    return <p className="text-gray-500 dark:text-gray-400">İstatistik yüklenemedi.</p>;
+  }
+
+  return (
+    <div>
+      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">İstatistikler</h3>
+      
+      {/* Özet */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+          <div className="text-sm text-gray-600 dark:text-gray-400">Toplam Log Sayısı</div>
+          <div className="text-2xl font-bold text-gray-900 dark:text-white">{statistics.totalLogs}</div>
+        </div>
+        <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+          <div className="text-sm text-gray-600 dark:text-gray-400">Toplam Aktif Süre</div>
+          <div className="text-2xl font-bold text-gray-900 dark:text-white">
+            {formatDuration(statistics.totalActiveDurationSeconds)}
+          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            ({statistics.totalActiveDurationHours} saat)
+          </div>
+        </div>
+        <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+          <div className="text-sm text-gray-600 dark:text-gray-400">Ortalama Oturum Süresi</div>
+          <div className="text-2xl font-bold text-gray-900 dark:text-white">
+            {statistics.totalLogs > 0 ? formatDuration(Math.floor(statistics.totalActiveDurationSeconds / statistics.totalLogs)) : '0 sn'}
+          </div>
+        </div>
+      </div>
+
+      {/* En Çok Kullanılan Sayfalar */}
+      {statistics.pageStats && statistics.pageStats.length > 0 && (
+        <div className="mb-6">
+          <h4 className="font-semibold mb-3 text-gray-900 dark:text-white">En Çok Kullanılan Sayfalar</h4>
+          <div className="space-y-2">
+            {statistics.pageStats.slice(0, 10).map((stat, index) => (
+              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                <span className="text-gray-900 dark:text-white">{stat.page}</span>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">{stat.count} kez</span>
+                  {stat.totalDuration > 0 && (
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {formatDuration(stat.totalDuration)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
+
+      {/* En Çok Kullanılan Tablar */}
+      {statistics.tabStats && statistics.tabStats.length > 0 && (
+        <div className="mb-6">
+          <h4 className="font-semibold mb-3 text-gray-900 dark:text-white">En Çok Kullanılan Tablar</h4>
+          <div className="space-y-2">
+            {statistics.tabStats.slice(0, 10).map((stat, index) => (
+              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                <span className="text-gray-900 dark:text-white">{stat.tab}</span>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">{stat.count} kez</span>
+                  {stat.totalDuration > 0 && (
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {formatDuration(stat.totalDuration)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* En Çok Kullanılan Makineler */}
+      {statistics.machineStats && statistics.machineStats.length > 0 && (
+        <div className="mb-6">
+          <h4 className="font-semibold mb-3 text-gray-900 dark:text-white">En Çok Kullanılan Makineler</h4>
+          <div className="space-y-2">
+            {statistics.machineStats.slice(0, 10).map((stat, index) => (
+              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                <span className="text-gray-900 dark:text-white">{stat.machineName || `Makine ID: ${stat.machineId}`}</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">{stat.count} kez</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Günlük Aktivite */}
+      {statistics.dailyActivity && statistics.dailyActivity.length > 0 && (
+        <div>
+          <h4 className="font-semibold mb-3 text-gray-900 dark:text-white">Günlük Aktivite Dağılımı</h4>
+          <div className="space-y-2">
+            {statistics.dailyActivity.map((day, index) => (
+              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded">
+                <span className="text-gray-900 dark:text-white">
+                  {new Date(day.date).toLocaleDateString('tr-TR')}
+                </span>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">{day.count} aktivite</span>
+                  {day.totalDuration > 0 && (
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {formatDuration(day.totalDuration)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Logs View Component
+const LogsView = ({ logs, formatDuration, getEventTypeLabel }) => {
+  if (!logs || logs.length === 0) {
+    return <p className="text-gray-500 dark:text-gray-400">Henüz log bulunmuyor.</p>;
+  }
+
+  return (
+    <div>
+      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Detaylı Loglar</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200 dark:border-gray-700">
+              <th className="text-left py-2 px-3 text-gray-700 dark:text-gray-300">Zaman</th>
+              <th className="text-left py-2 px-3 text-gray-700 dark:text-gray-300">Olay Tipi</th>
+              <th className="text-left py-2 px-3 text-gray-700 dark:text-gray-300">Sayfa</th>
+              <th className="text-left py-2 px-3 text-gray-700 dark:text-gray-300">Tab</th>
+              <th className="text-left py-2 px-3 text-gray-700 dark:text-gray-300">Alt Tab</th>
+              <th className="text-left py-2 px-3 text-gray-700 dark:text-gray-300">Makine</th>
+              <th className="text-left py-2 px-3 text-gray-700 dark:text-gray-300">Aksiyon</th>
+              <th className="text-left py-2 px-3 text-gray-700 dark:text-gray-300">Süre</th>
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map((log, index) => (
+              <tr key={log.id || index} className="border-b border-gray-200 dark:border-gray-700">
+                <td className="py-2 px-3 text-gray-900 dark:text-white">
+                  {new Date(log.timestamp).toLocaleString('tr-TR')}
+                </td>
+                <td className="py-2 px-3 text-gray-900 dark:text-white">
+                  {getEventTypeLabel(log.eventType)}
+                </td>
+                <td className="py-2 px-3 text-gray-600 dark:text-gray-400">{log.page || '-'}</td>
+                <td className="py-2 px-3 text-gray-600 dark:text-gray-400">{log.tab || '-'}</td>
+                <td className="py-2 px-3 text-gray-600 dark:text-gray-400">{log.subTab || '-'}</td>
+                <td className="py-2 px-3 text-gray-600 dark:text-gray-400">{log.machineName || '-'}</td>
+                <td className="py-2 px-3 text-gray-600 dark:text-gray-400">{log.action || '-'}</td>
+                <td className="py-2 px-3 text-gray-600 dark:text-gray-400">
+                  {log.duration ? formatDuration(log.duration) : '-'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

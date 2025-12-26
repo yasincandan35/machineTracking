@@ -16,6 +16,7 @@ import RemainingWorkInfoCard from '../components/Cards/Infos/RemainingWorkInfoCa
 import EstimatedTimeInfoCard from '../components/Cards/Infos/EstimatedTimeInfoCard';
 import ProductionInfoCard from '../components/Cards/Infos/ProductionInfoCard';
 import RobotPalletizingInfoCard from '../components/Cards/Infos/RobotPalletizingInfoCard';
+import ShiftOperatorsInfoCard from '../components/Cards/Infos/ShiftOperatorsInfoCard';
 
 
 // Kart boyut tanımları
@@ -40,6 +41,7 @@ export const cardDimensions = {
   'remainingWorkInfo': { w: 1, h: 1 },
   'estimatedTimeInfo': { w: 1, h: 1 },
   'robotPalletizingInfo': { w: 1, h: 2 }, // 1 kolon x 2 satır
+  'shiftOperatorsInfo': { w: 1, h: 1 },
   
   // Özel kartlar
   'productionSummaryInfo': { w: 1, h: 2 }, // 1 kolon x 2 satır

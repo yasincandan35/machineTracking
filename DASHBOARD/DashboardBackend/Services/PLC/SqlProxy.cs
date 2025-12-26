@@ -337,6 +337,9 @@ namespace DashboardBackend.Services.PLC
                     Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ❌ [WriteJobDataAsync] Aktif JobCycle kaydı güncellenemedi - aktif kayıt bulunamadı veya güncelleme başarısız");
                 }
 
+                // Yeni iş başladığında aktif idle kaydını bitir (varsa)
+                await CompleteActiveIdleRecordIfExistsAsync();
+
                 // Yeni iş başlangıç zamanında duruş durumunu kontrol et
                 // Eğer duruş kaydı zaten varsa (iş sonu basıldığında aktarılmışsa), onu koru
                 // Eğer makine duruyorsa ve duruş kaydı yoksa, yeni duruş kaydı başlat
@@ -804,7 +807,12 @@ namespace DashboardBackend.Services.PLC
                 
                 // Bundle ve pallet verilerini currentData.Data'dan al
                 var qualifiedBundle = GetInt(currentData.Data, "qualifiedBundle", 0);
+                // defectiveBundle için hem "defectiveBundle" hem de "defectiveItems" kontrol et (eski verilerle uyumluluk için)
                 var defectiveBundle = GetInt(currentData.Data, "defectiveBundle", 0);
+                if (defectiveBundle == 0)
+                {
+                    defectiveBundle = GetInt(currentData.Data, "defectiveItems", 0);
+                }
                 var goodPallets = GetInt(currentData.Data, "goodPallets", 0);
                 var defectivePallets = GetInt(currentData.Data, "defectivePallets", 0);
                 
@@ -4218,6 +4226,73 @@ BEGIN
     CREATE INDEX IX_JobCycleRecords_siparis_no ON JobCycleRecords(siparis_no);
 END";
             
+            using var cmd = new SqlCommand(createTableQuery, connection);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        /// <summary>
+        /// Yeni iş başladığında aktif idle kaydını bitir (varsa)
+        /// </summary>
+        private async Task CompleteActiveIdleRecordIfExistsAsync()
+        {
+            try
+            {
+                using var conn = new SqlConnection(connectionString);
+                await conn.OpenAsync();
+                
+                // MachineIdleRecords tablosunu oluştur (yoksa)
+                await EnsureMachineIdleRecordsTableAsync(conn);
+                
+                var query = @"
+                    UPDATE MachineIdleRecords 
+                    SET 
+                        end_time = GETDATE(),
+                        duration_seconds = DATEDIFF(SECOND, start_time, GETDATE()),
+                        status = 'completed',
+                        updated_at = GETDATE()
+                    WHERE status = 'active'";
+
+                using var cmd = new SqlCommand(query, conn);
+                var rowsAffected = await cmd.ExecuteNonQueryAsync();
+                
+                if (rowsAffected > 0)
+                {
+                    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ✅ [CompleteActiveIdleRecordIfExistsAsync] Aktif boşta kalma kaydı tamamlandı. {rowsAffected} kayıt güncellendi.");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Hata olsa bile iş akışını bozma, sadece logla
+                Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] ⚠️ [CompleteActiveIdleRecordIfExistsAsync] Hata: {ex.Message}");
+            }
+        }
+
+        private static async Task EnsureMachineIdleRecordsTableAsync(SqlConnection connection)
+        {
+            var createTableQuery = @"
+IF OBJECT_ID(N'MachineIdleRecords', N'U') IS NULL
+BEGIN
+    CREATE TABLE MachineIdleRecords (
+        Id INT IDENTITY(1,1) PRIMARY KEY,
+        start_time DATETIME2 NOT NULL,
+        end_time DATETIME2 NULL,
+        duration_seconds INT NULL,
+        last_job_end_time DATETIME2 NOT NULL,
+        last_job_order_number NVARCHAR(50) NULL,
+        plc_connected BIT NOT NULL DEFAULT 1,
+        machine_stopped BIT NOT NULL DEFAULT 1,
+        status NVARCHAR(20) NOT NULL DEFAULT 'active',
+        reason NVARCHAR(200) NULL DEFAULT 'extended_idle_after_job_end',
+        created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
+        updated_at DATETIME2 NOT NULL DEFAULT GETDATE()
+    );
+    
+    CREATE INDEX IX_MachineIdleRecords_status ON MachineIdleRecords(status);
+    CREATE INDEX IX_MachineIdleRecords_start_time ON MachineIdleRecords(start_time);
+    CREATE INDEX IX_MachineIdleRecords_last_job_end_time ON MachineIdleRecords(last_job_end_time);
+    CREATE INDEX IX_MachineIdleRecords_status_start_time ON MachineIdleRecords(status, start_time);
+END";
+
             using var cmd = new SqlCommand(createTableQuery, connection);
             await cmd.ExecuteNonQueryAsync();
         }

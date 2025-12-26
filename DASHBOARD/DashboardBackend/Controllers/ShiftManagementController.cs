@@ -1253,6 +1253,384 @@ namespace DashboardBackend.Controllers
             await command.ExecuteNonQueryAsync();
         }
 
+        // GET: /api/shiftmanagement/current
+        [HttpGet("current")]
+        [Authorize]
+        public async Task<IActionResult> GetCurrentShift([FromQuery] string? machine = null)
+        {
+            try
+            {
+                var (connectionString, databaseName) = await GetConnectionStringAsync(machine);
+
+                await using var conn = new SqlConnection(connectionString);
+                await conn.OpenAsync();
+                await EnsureShiftTablesAsync(conn);
+
+                var now = DateTime.Now;
+                var today = now.Date;
+                var currentTime = now.TimeOfDay;
+
+                // Bugünün vardiya atamalarını al ve şu anki saat için aktif olanı bul
+                // Geceye sarkan vardiyaları da dikkate al (örn: 22:00 - 06:00)
+                // Position = 'SORUMLU OPERATÖR' olan kaydı öncelikli olarak seç
+                var cmd = new SqlCommand(@"
+                    SELECT TOP 1
+                        sa.id,
+                        sa.shift_date,
+                        sa.employee_id,
+                        sa.template_id,
+                        sa.is_primary,
+                        sa.position,
+                        e.name as employee_name,
+                        st.name as template_name,
+                        st.start_time,
+                        st.end_time,
+                        st.color,
+                        CASE 
+                            WHEN st.end_time < st.start_time THEN
+                                -- Geceye sarkan vardiya
+                                CASE 
+                                    WHEN @currentTime >= st.start_time THEN
+                                        -- Bugün başlayan vardiya
+                                        DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.start_time), CAST(sa.shift_date AS datetime))
+                                    ELSE
+                                        -- Dün başlayan vardiya
+                                        DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.start_time), DATEADD(DAY, -1, CAST(sa.shift_date AS datetime)))
+                                END
+                            ELSE
+                                -- Normal vardiya
+                                DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.start_time), CAST(sa.shift_date AS datetime))
+                        END AS shift_start,
+                        CASE 
+                            WHEN st.end_time < st.start_time THEN
+                                -- Geceye sarkan vardiya
+                                CASE 
+                                    WHEN @currentTime >= st.start_time THEN
+                                        -- Bugün başlayan vardiya, yarın bitiyor
+                                        DATEADD(DAY, 1, DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.end_time), CAST(sa.shift_date AS datetime)))
+                                    ELSE
+                                        -- Dün başlayan vardiya, bugün bitiyor
+                                        DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.end_time), CAST(sa.shift_date AS datetime))
+                                END
+                            ELSE
+                                -- Normal vardiya
+                                DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.end_time), CAST(sa.shift_date AS datetime))
+                        END AS shift_end
+                    FROM shift_assignments sa
+                    JOIN employees e ON sa.employee_id = e.id
+                    JOIN shift_templates st ON sa.template_id = st.id
+                    WHERE sa.shift_date BETWEEN DATEADD(DAY, -1, @today) AND @today
+                    AND (
+                        -- Normal vardiya (örn: 08:00 - 16:00)
+                        (st.end_time >= st.start_time AND @currentTime >= st.start_time AND @currentTime < st.end_time AND sa.shift_date = @today)
+                        OR
+                        -- Geceye sarkan vardiya - bugün başlayan (örn: 22:00 - 06:00, şu an 23:00)
+                        (st.end_time < st.start_time AND @currentTime >= st.start_time AND sa.shift_date = @today)
+                        OR
+                        -- Geceye sarkan vardiya - dün başlayan (örn: 22:00 - 06:00, şu an 02:00)
+                        (st.end_time < st.start_time AND @currentTime < st.end_time AND sa.shift_date = DATEADD(DAY, -1, @today))
+                    )
+                    ORDER BY 
+                        CASE WHEN sa.position = 'SORUMLU OPERATÖR' THEN 0 ELSE 1 END,
+                        CASE WHEN sa.is_primary = 1 THEN 0 ELSE 1 END,
+                        CASE WHEN st.end_time < st.start_time AND @currentTime < st.end_time THEN 0 ELSE 1 END,
+                        st.start_time
+                ", conn);
+
+                cmd.Parameters.AddWithValue("@today", today);
+                cmd.Parameters.AddWithValue("@currentTime", currentTime);
+
+                await using var reader = await cmd.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    var shiftStart = (DateTime)reader["shift_start"];
+                    var shiftEnd = (DateTime)reader["shift_end"];
+
+                    var isPrimary = reader["is_primary"] != DBNull.Value && (bool)reader["is_primary"];
+
+                    var shiftDate = ((DateTime)reader["shift_date"]).Date;
+                    return Ok(new
+                    {
+                        success = true,
+                        data = new
+                        {
+                            employeeId = (int)reader["employee_id"],
+                            employeeName = (string)reader["employee_name"],
+                            templateId = (int)reader["template_id"],
+                            templateName = (string)reader["template_name"],
+                            startTime = ((TimeSpan)reader["start_time"]).ToString(@"hh\:mm"),
+                            endTime = ((TimeSpan)reader["end_time"]).ToString(@"hh\:mm"),
+                            color = (string)reader["color"],
+                            shiftStart = shiftStart.ToString("yyyy-MM-ddTHH:mm:ss"),
+                            shiftEnd = shiftEnd.ToString("yyyy-MM-ddTHH:mm:ss"),
+                            isPrimary = isPrimary,
+                            shiftDate = shiftDate.ToString("yyyy-MM-dd"),
+                            dayName = shiftDate.ToString("dddd", new System.Globalization.CultureInfo("tr-TR"))
+                        }
+                    });
+                }
+
+                return Ok(new
+                {
+                    success = false,
+                    message = "Aktif vardiya bulunamadı"
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    error = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    error = "Mevcut vardiya bilgisi alınamadı",
+                    message = ex.Message
+                });
+            }
+        }
+
+        // GET: /api/shiftmanagement/adjacent-shifts
+        [HttpGet("adjacent-shifts")]
+        [Authorize]
+        public async Task<IActionResult> GetAdjacentShifts([FromQuery] string? machine = null)
+        {
+            try
+            {
+                var (connectionString, databaseName) = await GetConnectionStringAsync(machine);
+
+                await using var conn = new SqlConnection(connectionString);
+                await conn.OpenAsync();
+                await EnsureShiftTablesAsync(conn);
+
+                var now = DateTime.Now;
+                var today = now.Date;
+
+                // Önce şu anki vardiyayı bul (current endpoint'inden aynı mantık)
+                var currentShiftCmd = new SqlCommand(@"
+                    SELECT TOP 1
+                        sa.shift_date,
+                        sa.template_id,
+                        sa.employee_id,
+                        st.start_time,
+                        st.end_time,
+                        CASE 
+                            WHEN st.end_time < st.start_time THEN
+                                CASE 
+                                    WHEN @currentTime >= st.start_time THEN
+                                        DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.start_time), CAST(sa.shift_date AS datetime))
+                                    ELSE
+                                        DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.start_time), DATEADD(DAY, -1, CAST(sa.shift_date AS datetime)))
+                                END
+                            ELSE
+                                DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.start_time), CAST(sa.shift_date AS datetime))
+                        END AS shift_start,
+                        CASE 
+                            WHEN st.end_time < st.start_time THEN
+                                CASE 
+                                    WHEN @currentTime >= st.start_time THEN
+                                        DATEADD(DAY, 1, DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.end_time), CAST(sa.shift_date AS datetime)))
+                                    ELSE
+                                        DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.end_time), CAST(sa.shift_date AS datetime))
+                                END
+                            ELSE
+                                DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.end_time), CAST(sa.shift_date AS datetime))
+                        END AS shift_end
+                    FROM shift_assignments sa
+                    JOIN shift_templates st ON sa.template_id = st.id
+                    WHERE sa.shift_date BETWEEN DATEADD(DAY, -1, @today) AND @today
+                    AND sa.position = 'SORUMLU OPERATÖR'
+                    AND (
+                        (st.end_time >= st.start_time AND @currentTime >= st.start_time AND @currentTime < st.end_time AND sa.shift_date = @today)
+                        OR
+                        (st.end_time < st.start_time AND @currentTime >= st.start_time AND sa.shift_date = @today)
+                        OR
+                        (st.end_time < st.start_time AND @currentTime < st.end_time AND sa.shift_date = DATEADD(DAY, -1, @today))
+                    )
+                    ORDER BY 
+                        CASE WHEN sa.position = 'SORUMLU OPERATÖR' THEN 0 ELSE 1 END,
+                        CASE WHEN sa.is_primary = 1 THEN 0 ELSE 1 END,
+                        st.start_time
+                ", conn);
+
+                currentShiftCmd.Parameters.AddWithValue("@today", today);
+                currentShiftCmd.Parameters.AddWithValue("@currentTime", now.TimeOfDay);
+
+                DateTime? currentShiftStart = null;
+                DateTime? currentShiftEnd = null;
+                int? currentTemplateId = null;
+                DateTime? currentShiftDate = null;
+
+                await using (var reader = await currentShiftCmd.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        currentShiftStart = (DateTime)reader["shift_start"];
+                        currentShiftEnd = (DateTime)reader["shift_end"];
+                        currentTemplateId = (int)reader["template_id"];
+                        currentShiftDate = ((DateTime)reader["shift_date"]).Date;
+                    }
+                }
+
+                // Önceki vardiya - şu anki vardiyanın başlangıcından ÖNCE veya EŞİT biten son vardiya (TÜM vardiyalardan, template_id fark etmez)
+                // Ama şu anki vardiyanın kendisini hariç tut (shift_date ve template_id kontrolü ile)
+                object? previousShift = null;
+                if (currentShiftStart.HasValue && currentTemplateId.HasValue && currentShiftDate.HasValue)
+                {
+                    var previousCmd = new SqlCommand(@"
+                        SELECT TOP 1
+                            sa.shift_date,
+                            e.name as employee_name,
+                            st.name as template_name,
+                            st.start_time,
+                            st.end_time,
+                            st.color,
+                            CASE 
+                                WHEN st.end_time < st.start_time THEN
+                                    DATEADD(DAY, 1, DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.end_time), CAST(sa.shift_date AS datetime)))
+                                ELSE
+                                    DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.end_time), CAST(sa.shift_date AS datetime))
+                            END AS shift_end
+                        FROM shift_assignments sa
+                        JOIN employees e ON sa.employee_id = e.id
+                        JOIN shift_templates st ON sa.template_id = st.id
+                        WHERE sa.position = 'SORUMLU OPERATÖR'
+                        AND NOT (sa.shift_date = @currentShiftDate AND sa.template_id = @currentTemplateId)
+                        AND (
+                            CASE 
+                                WHEN st.end_time < st.start_time THEN
+                                    DATEADD(DAY, 1, DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.end_time), CAST(sa.shift_date AS datetime)))
+                                ELSE
+                                    DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.end_time), CAST(sa.shift_date AS datetime))
+                            END
+                        ) <= @currentShiftStart
+                        ORDER BY 
+                            CASE 
+                                WHEN st.end_time < st.start_time THEN
+                                    DATEADD(DAY, 1, DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.end_time), CAST(sa.shift_date AS datetime)))
+                                ELSE
+                                    DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.end_time), CAST(sa.shift_date AS datetime))
+                            END DESC
+                    ", conn);
+
+                    previousCmd.Parameters.AddWithValue("@currentShiftStart", currentShiftStart.Value);
+                    previousCmd.Parameters.AddWithValue("@currentShiftDate", currentShiftDate.Value);
+                    previousCmd.Parameters.AddWithValue("@currentTemplateId", currentTemplateId.Value);
+
+                    await using (var reader = await previousCmd.ExecuteReaderAsync())
+                    {
+                        if (await reader.ReadAsync())
+                        {
+                            var shiftDate = ((DateTime)reader["shift_date"]).Date;
+                            previousShift = new
+                            {
+                                employeeName = (string)reader["employee_name"],
+                                templateName = (string)reader["template_name"],
+                                startTime = ((TimeSpan)reader["start_time"]).ToString(@"hh\:mm"),
+                                endTime = ((TimeSpan)reader["end_time"]).ToString(@"hh\:mm"),
+                                color = (string)reader["color"],
+                                shiftDate = shiftDate.ToString("yyyy-MM-dd"),
+                                dayName = shiftDate.ToString("dddd", new System.Globalization.CultureInfo("tr-TR"))
+                            };
+                        }
+                    }
+                }
+
+                // Sonraki vardiya - şu anki vardiyanın bitişinden SONRA başlayan ilk vardiya (TÜM vardiyalardan, template_id fark etmez)
+                // Ama şu anki vardiyanın kendisini hariç tut (shift_date ve template_id kontrolü ile)
+                object? nextShift = null;
+                if (currentShiftEnd.HasValue && currentTemplateId.HasValue && currentShiftDate.HasValue)
+                {
+                    var nextCmd = new SqlCommand(@"
+                        SELECT TOP 1
+                            sa.shift_date,
+                            e.name as employee_name,
+                            st.name as template_name,
+                            st.start_time,
+                            st.end_time,
+                            st.color,
+                            CASE 
+                                WHEN st.end_time < st.start_time THEN
+                                    DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.start_time), CAST(sa.shift_date AS datetime))
+                                ELSE
+                                    DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.start_time), CAST(sa.shift_date AS datetime))
+                            END AS shift_start
+                        FROM shift_assignments sa
+                        JOIN employees e ON sa.employee_id = e.id
+                        JOIN shift_templates st ON sa.template_id = st.id
+                        WHERE sa.position = 'SORUMLU OPERATÖR'
+                        AND NOT (sa.shift_date = @currentShiftDate AND sa.template_id = @currentTemplateId)
+                        AND (
+                            CASE 
+                                WHEN st.end_time < st.start_time THEN
+                                    DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.start_time), CAST(sa.shift_date AS datetime))
+                                ELSE
+                                    DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.start_time), CAST(sa.shift_date AS datetime))
+                            END
+                        ) >= @currentShiftEnd
+                        ORDER BY 
+                            CASE 
+                                WHEN st.end_time < st.start_time THEN
+                                    DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.start_time), CAST(sa.shift_date AS datetime))
+                                ELSE
+                                    DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS time), st.start_time), CAST(sa.shift_date AS datetime))
+                            END ASC
+                    ", conn);
+
+                    nextCmd.Parameters.AddWithValue("@currentShiftEnd", currentShiftEnd.Value);
+                    nextCmd.Parameters.AddWithValue("@currentShiftDate", currentShiftDate.Value);
+                    nextCmd.Parameters.AddWithValue("@currentTemplateId", currentTemplateId.Value);
+
+                    await using (var reader = await nextCmd.ExecuteReaderAsync())
+                    {
+                        if (await reader.ReadAsync())
+                        {
+                            var shiftDate = ((DateTime)reader["shift_date"]).Date;
+                            nextShift = new
+                            {
+                                employeeName = (string)reader["employee_name"],
+                                templateName = (string)reader["template_name"],
+                                startTime = ((TimeSpan)reader["start_time"]).ToString(@"hh\:mm"),
+                                endTime = ((TimeSpan)reader["end_time"]).ToString(@"hh\:mm"),
+                                color = (string)reader["color"],
+                                shiftDate = shiftDate.ToString("yyyy-MM-dd"),
+                                dayName = shiftDate.ToString("dddd", new System.Globalization.CultureInfo("tr-TR"))
+                            };
+                        }
+                    }
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    previousShift = previousShift,
+                    nextShift = nextShift
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    error = ex.Message
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    error = "Vardiya bilgisi alınamadı",
+                    message = ex.Message
+                });
+            }
+        }
+
         private void LogConnection(string action, string connectionString, string? machine, string? databaseName, int count)
         {
             try

@@ -21,6 +21,7 @@ const supportedCardKeys = new Set([
   "estimatedTimeInfo",
   "productionSummaryInfo",
   "robotPalletizingInfo",
+  "shiftOperatorsInfo",
   "oeeGauge",
   "stoppageChart",
 ]);
@@ -33,6 +34,7 @@ const basicCards = [
   { key: "ethylConsumptionInfo", label: "ethylConsumptionCard" },
   { key: "energyConsumptionInfo", label: "energyConsumptionCard" },
   { key: "productionSummaryInfo", label: "productionSummaryCard" },
+  { key: "shiftOperatorsInfo", label: "shiftOperatorsInfoCard" },
   { key: "oeeGauge", label: "oeeGaugeCard" },
   { key: "stoppageChart", label: "stoppageChartCard" }
 ].filter(c => supportedCardKeys.has(c.key));

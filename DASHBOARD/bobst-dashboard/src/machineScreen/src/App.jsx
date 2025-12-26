@@ -23,7 +23,8 @@ import {
   Search,
   BarChart3,
   Wrench,
-  MapPin
+  MapPin,
+  User
 } from 'lucide-react';
 import './App.css';
 import StopReasonCategories from './components/StopReasonCategories';
@@ -73,6 +74,9 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
 
   // Global Xmas modu (DashboardBackend SettingsController'dan)
   const [isXmasMode, setIsXmasMode] = useState(false);
+
+  // Vardiya ve operatör bilgileri
+  const [currentShift, setCurrentShift] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1153,6 +1157,26 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
     }
   };
 
+  // Mevcut vardiya bilgilerini çek
+  const fetchCurrentShift = useCallback(async () => {
+    if (!machineTableName) return;
+    
+    try {
+      const response = await machineApi.get('/shiftmanagement/current', {
+        params: { machine: machineTableName }
+      });
+      
+      if (response.data?.success && response.data?.data) {
+        setCurrentShift(response.data.data);
+      } else {
+        setCurrentShift(null);
+      }
+    } catch (error) {
+      console.warn('Vardiya bilgisi alınamadı:', error);
+      setCurrentShift(null);
+    }
+  }, [machineApi, machineTableName]);
+
   // Periyodik veri okuma
   useEffect(() => {
     // Sayfa kaydırmayı engelle
@@ -1232,6 +1256,7 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
     fetchAllData();
     fetchCachedJobData(); // API'den güncel veriyi çek ve currentOrder'ı güncelle
     fetchMyMaintenanceRequests(); // Kullanıcının bildirimlerini çek
+    fetchCurrentShift(); // Mevcut vardiya bilgilerini çek
     
     const pollMs = 200; // 200ms polling
     const maintenancePollMs = 30000; // 30 saniyede bir bildirimleri yenile
@@ -1252,6 +1277,11 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
       }
     }, 30000);
 
+    // Vardiya bilgilerini periyodik olarak yenile (60 saniyede bir)
+    const shiftInterval = setInterval(() => {
+      fetchCurrentShift();
+    }, 60000);
+
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('wheel', preventScroll);
@@ -1261,8 +1291,9 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
       clearInterval(interval);
       clearInterval(jobInterval);
       clearInterval(maintenanceInterval);
+      clearInterval(shiftInterval);
     };
-  }, [machineApi, user?.id]);
+  }, [machineApi, user?.id, machineTableName]);
 
   // Saat güncelleme
   useEffect(() => {
@@ -1272,6 +1303,18 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
 
     return () => clearInterval(timeInterval);
   }, []);
+
+  // Vardiya bilgilerini periyodik olarak yenile (her dakika)
+  useEffect(() => {
+    if (machineTableName) {
+      fetchCurrentShift();
+      const interval = setInterval(() => {
+        fetchCurrentShift();
+      }, 60000); // Her 60 saniyede bir
+
+      return () => clearInterval(interval);
+    }
+  }, [machineTableName, fetchCurrentShift]);
 
   // Component unmount olduğunda timer'ları temizle
   useEffect(() => {
@@ -1302,6 +1345,35 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
     [announcements]
   );
 
+  // Vardiya zamanı formatlama fonksiyonları
+  const formatShiftDuration = (seconds) => {
+    if (!seconds || seconds <= 0) return '0dk';
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}s ${minutes}dk`;
+    }
+    return `${minutes}dk`;
+  };
+
+  const getShiftTimeInfo = useMemo(() => {
+    if (!currentShift) return null;
+    
+    const now = new Date();
+    const shiftStart = new Date(currentShift.shiftStart);
+    const shiftEnd = new Date(currentShift.shiftEnd);
+    
+    const elapsedSeconds = Math.floor((now - shiftStart) / 1000);
+    const remainingSeconds = Math.max(0, Math.floor((shiftEnd - now) / 1000));
+    
+    return {
+      elapsed: elapsedSeconds,
+      remaining: remainingSeconds,
+      elapsedFormatted: formatShiftDuration(elapsedSeconds),
+      remainingFormatted: formatShiftDuration(remainingSeconds)
+    };
+  }, [currentShift, currentTime]);
+
   // Makine çalışıyor ekranı
   if (machineStatus === 'running') {
     return (
@@ -1311,20 +1383,34 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
         {/* Üst Bilgi Çubuğu */}
         <div className="top-bar">
           <div className="status-indicator running">
-                      <div className="status-icon">
-            <Settings size={20} />
-          </div>
-          <div className="status-text">
-            <span className="status-label">ÇALIŞIYOR</span>
-            <span className="status-subtitle">Üretim Aktif</span>
-          </div>
+            <div className="status-icon">
+              <Settings size={20} />
+            </div>
+            <div className="status-text">
+              <span className="status-label">ÇALIŞIYOR</span>
+              <span className="status-subtitle">Üretim Aktif</span>
+            </div>
             <div className="status-pulse"></div>
           </div>
           
           {/* Makine Resimleri */}
           <div className="machine-images">
             {/* Makine silüeti - Dashboard ile aynı görsel path'i kullan */}
-            <img src="/lpng/l3komple.png" alt="Makine Komple" className="machine-img-comple" />
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <img 
+                src="/lpng/l3komple.png" 
+                alt="Makine Komple" 
+                className="machine-img-comple"
+                style={{ 
+                  position: 'relative', 
+                  zIndex: 1,
+                  filter: machineStatus === 'running' 
+                    ? 'drop-shadow(0 0 15px rgba(5, 150, 105, 0.5))' 
+                    : 'drop-shadow(0 0 15px rgba(239, 68, 68, 0.5))',
+                  transition: 'filter 0.3s ease'
+                }}
+              />
+            </div>
           </div>
                   
                   <div className="top-bar-right">
@@ -1497,6 +1583,11 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
                     <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#ef4444', lineHeight: '1.2' }}>
                       {formatStoppageDuration(stoppageData.stoppageDuration)}
                     </div>
+                    {selectedStopReasonId && selectedStopCategory && selectedStopReason && (
+                      <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem' }}>
+                        {selectedStopReason}
+                      </div>
+                    )}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem', fontWeight: '500' }}>Toplam Duruş:</div>
@@ -2427,7 +2518,21 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
         {/* Makine Resimleri */}
         <div className="machine-images">
           {/* Makine silüeti - Dashboard ile aynı görsel path'i kullan */}
-          <img src="/lpng/l3komple.png" alt="Makine Komple" className="machine-img-comple" />
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <img 
+              src="/lpng/l3komple.png" 
+              alt="Makine Komple" 
+              className="machine-img-comple"
+              style={{ 
+                position: 'relative', 
+                zIndex: 1,
+                filter: machineStatus === 'running' 
+                  ? 'drop-shadow(0 0 15px rgba(5, 150, 105, 0.5))' 
+                  : 'drop-shadow(0 0 15px rgba(239, 68, 68, 0.5))',
+                transition: 'filter 0.3s ease'
+              }}
+            />
+          </div>
         </div>
         
         <div className="top-bar-right">
@@ -2535,6 +2640,7 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
               </button>
             </div>
           )}
+
         </div>
 
         {/* Sağ Panel - Üretim Bilgileri */}
@@ -2597,6 +2703,11 @@ const MachineScreenInner = ({ machineApi, machineTableName, machineName, languag
                   <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#ef4444', lineHeight: '1.2' }}>
                     {formatStoppageDuration(stoppageData.stoppageDuration)}
                   </div>
+                  {selectedStopReasonId && selectedStopCategory && selectedStopReason && (
+                    <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem' }}>
+                      {selectedStopReason}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem', fontWeight: '500' }}>Toplam Duruş:</div>

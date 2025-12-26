@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useColor } from '../contexts/ColorContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -13,6 +13,7 @@ import DashboardHeader from '../components/DashboardHeader';
 import GridSystem from '../components/GridSystem';
 import CardSettingsModal from '../components/Modals/CardSettingsModal';
 import { useDashboardData } from '../hooks/useDashboardData';
+import { useActivityTracking } from '../hooks/useActivityTracking';
 import MachineOverviewCard from '../components/Cards/MachineOverviewCard';
 import FluidBackground from '../components/FluidBackground';
 
@@ -33,6 +34,7 @@ import TemperatureHumidityPage from './TemperatureHumidityPage';
 import MaintenancePage from './MaintenancePage';
 import MaintenanceManualPage from './MaintenanceManualPage';
 import PeriodicSummariesPage from './PeriodicSummariesPage';
+import OperatorPerformancePage from './OperatorPerformancePage';
 import { usePushNotification } from '../contexts/PushNotificationContext';
 import { Bell, X, AlertCircle } from 'lucide-react';
 import XmasLights from '../components/Decor/XmasLights';
@@ -59,6 +61,7 @@ function Dashboard() {
     'paperConsumptionInfo',
     'ethylConsumptionInfo',
     'stopDurationInfo',
+    'shiftOperatorsInfo',
     'oeeGauge',
     'stoppageChart'
   ]);
@@ -67,10 +70,11 @@ function Dashboard() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [savedLayout, setSavedLayout] = useState(null);
   const [hasLoadedPreferences, setHasLoadedPreferences] = useState(false);
-  const [homeSubTab, setHomeSubTab] = useState('dashboard'); // 'dashboard' | 'periodicSummaries'
+  const [homeSubTab, setHomeSubTab] = useState('dashboard'); // 'dashboard' | 'periodicSummaries' | 'operatorPerformance'
   const [isXmasMode, setIsXmasMode] = useState(false);
 
-  const { user } = useAuth();
+  const { user, updateHeartbeatInfo } = useAuth();
+  const location = useLocation();
   const { colorSettings } = useColor();
   const { theme, isLiquidGlass, isFluid, changeTheme } = useTheme();
   const { permission, fcmToken, isSupported, requestPermissionAndRegister } = usePushNotification();
@@ -128,6 +132,13 @@ function Dashboard() {
       }
     }
   }, [urlTab, allowedSections, defaultTab, setSearchParams]);
+
+  // Heartbeat bilgilerini güncelle
+  useEffect(() => {
+    if (updateHeartbeatInfo) {
+      updateHeartbeatInfo(location.pathname, currentTab);
+    }
+  }, [location.pathname, currentTab, updateHeartbeatInfo]);
 
   useEffect(() => {
     if (allowedSections && allowedSections.length > 0) {
@@ -261,6 +272,15 @@ function Dashboard() {
     selectedMachine: hookSelectedMachine,
     setSelectedMachine: hookSetSelectedMachine
   } = useDashboardData(userId, currentLanguage, currentTab);
+
+  // Activity tracking - Home tab için subTab bilgisi de gönder
+  const currentSubTab = currentTab === 'home' ? homeSubTab : null;
+  useActivityTracking({
+    currentTab,
+    currentSubTab,
+    selectedMachine: hookSelectedMachine,
+    enabled: !!userId && !user?.isDemo // Demo kullanıcılar için tracking kapalı (opsiyonel)
+  });
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -523,7 +543,7 @@ function Dashboard() {
                   marginRight: '-1rem',
                   paddingLeft: '1rem',
                   paddingRight: '1rem',
-md                  pointerEvents: 'none', // Scroll event'lerinin geçmesi için
+                  pointerEvents: 'none', // Scroll event'lerinin geçmesi için
                 }}
               >
                 <div className="flex gap-2" style={{ pointerEvents: 'auto' }}>
@@ -546,6 +566,16 @@ md                  pointerEvents: 'none', // Scroll event'lerinin geçmesi içi
                     }`}
                   >
                     {currentLanguage === 'tr' ? 'Periyodik Özetler' : 'Periodic Summaries'}
+                  </button>
+                  <button
+                    onClick={() => setHomeSubTab('operatorPerformance')}
+                    className={`px-4 py-2 font-medium text-sm transition-colors ${
+                      homeSubTab === 'operatorPerformance'
+                        ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`}
+                  >
+                    {currentLanguage === 'tr' ? 'Operatör Özetleri' : 'Operator Summaries'}
                   </button>
                 </div>
 
@@ -578,6 +608,13 @@ md                  pointerEvents: 'none', // Scroll event'lerinin geçmesi içi
 
             {homeSubTab === 'periodicSummaries' ? (
               <PeriodicSummariesPage
+                darkMode={darkMode}
+                currentLanguage={currentLanguage}
+                selectedMachine={hookSelectedMachine}
+                colorSettings={colorSettings}
+              />
+            ) : homeSubTab === 'operatorPerformance' ? (
+              <OperatorPerformancePage
                 darkMode={darkMode}
                 currentLanguage={currentLanguage}
                 selectedMachine={hookSelectedMachine}
@@ -663,6 +700,7 @@ md                  pointerEvents: 'none', // Scroll event'lerinin geçmesi içi
         {currentTab === 'database' && <DatabaseAdmin />}
         {currentTab === 'admin' && <AdminPanel />}
         {currentTab === 'shifts' && <ShiftManagement darkMode={darkMode} selectedMachine={hookSelectedMachine} currentLanguage={currentLanguage} />}
+        {currentTab === 'operatorPerformance' && <OperatorPerformancePage darkMode={darkMode} selectedMachine={hookSelectedMachine} currentLanguage={currentLanguage} colorSettings={colorSettings} />}
         {currentTab === 'settings' && <SettingsPage currentLanguage={currentLanguage} />}
         {currentTab === 'profile' && <ProfilePage currentLanguage={currentLanguage} />}
         {currentTab === 'feedback' && <FeedbackPage currentLanguage={currentLanguage} />}

@@ -25,6 +25,7 @@ namespace DashboardBackend.Data
         public DbSet<MaintenanceNotificationRecipient> MaintenanceNotificationRecipients { get; set; }
         public DbSet<UserNotificationSetting> UserNotificationSettings { get; set; }
         public DbSet<MachineAnnouncement> MachineAnnouncements { get; set; }
+        public DbSet<UserActivityLog> UserActivityLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -53,6 +54,7 @@ namespace DashboardBackend.Data
             modelBuilder.Entity<MaintenanceNotificationRecipient>().ToTable("MaintenanceNotificationRecipients");
             modelBuilder.Entity<UserNotificationSetting>().ToTable("UserNotificationSettings");
             modelBuilder.Entity<MachineAnnouncement>().ToTable("MachineAnnouncements");
+            modelBuilder.Entity<UserActivityLog>().ToTable("UserActivityLogs");
         }
     }
 }

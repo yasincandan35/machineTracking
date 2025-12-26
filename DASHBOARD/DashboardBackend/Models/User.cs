@@ -61,6 +61,13 @@ namespace DashboardBackend.Models
 
         // JSON olarak kullanıcı bazlı gizlilik tercihleri
         public string? PrivacySettings { get; set; }
+
+        // Anlık sayfa ve tab bilgisi
+        [MaxLength(200)]
+        public string? CurrentPage { get; set; } // Kullanıcının o an bulunduğu sayfa (örn: "/", "/admin")
+
+        [MaxLength(200)]
+        public string? CurrentTab { get; set; }  // Kullanıcının o an bulunduğu tab (örn: "home", "users")
     }
 }
 

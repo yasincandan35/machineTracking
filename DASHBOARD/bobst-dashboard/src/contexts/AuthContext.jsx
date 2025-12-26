@@ -15,6 +15,8 @@ export const AuthProvider = ({ children }) => {
   const [refreshCount, setRefreshCount] = useState(0); // Token yenilendiğinde artır
   const refreshTimerRef = useRef(null);
   const heartbeatTimerRef = useRef(null); // Heartbeat için timer
+  const currentPageRef = useRef(null); // Anlık sayfa bilgisi
+  const currentTabRef = useRef(null); // Anlık tab bilgisi
 
   // Token yenileme fonksiyonu
   const refreshToken = async () => {
@@ -86,7 +88,11 @@ export const AuthProvider = ({ children }) => {
         if (!savedToken) return;
         
         try {
-          const response = await api.post('/auth/heartbeat', {}, {
+          const heartbeatData = {
+            currentPage: currentPageRef.current || window.location.pathname,
+            currentTab: currentTabRef.current || null
+          };
+          const response = await api.post('/auth/heartbeat', heartbeatData, {
             headers: { 'Authorization': `Bearer ${savedToken}` }
           });
           
@@ -304,8 +310,14 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
+  // Heartbeat bilgilerini güncellemek için fonksiyon
+  const updateHeartbeatInfo = (page, tab) => {
+    if (page) currentPageRef.current = page;
+    if (tab) currentTabRef.current = tab;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading, refreshToken, refreshCount }}>
+    <AuthContext.Provider value={{ user, token, login, logout, isLoading, refreshToken, refreshCount, updateHeartbeatInfo }}>
       {children}
     </AuthContext.Provider>
   );

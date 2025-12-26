@@ -93,6 +93,10 @@ builder.Services.AddHostedService<JobOrderRetryService>();
 
 // Periodic Snapshot Background Service
 builder.Services.AddHostedService<PeriodicSnapshotService>();
+builder.Services.AddHostedService<OperatorPerformanceSnapshotService>();
+
+// Machine Idle Monitoring Background Service
+builder.Services.AddHostedService<MachineIdleMonitoringService>();
 
 // CORS - Local IP'ler + Production Domain'ler
 builder.Services.AddCors(options =>

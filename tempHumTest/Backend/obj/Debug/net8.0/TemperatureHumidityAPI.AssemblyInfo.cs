@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TemperatureHumidityAPI")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+cb2e396152f7a53ec08d61b8462014be811bcde0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+70020ede3572b8d563fa53dcd14d3e0c186df1db")]
 [assembly: System.Reflection.AssemblyProductAttribute("TemperatureHumidityAPI")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TemperatureHumidityAPI")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

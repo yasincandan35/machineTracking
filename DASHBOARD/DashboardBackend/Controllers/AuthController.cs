@@ -272,7 +272,7 @@ namespace DashboardBackend.Controllers
         // POST: api/auth/heartbeat
         [HttpPost("heartbeat")]
         [Authorize]
-        public async Task<IActionResult> Heartbeat()
+        public async Task<IActionResult> Heartbeat([FromBody] HeartbeatRequest? request = null)
         {
             var userId = User.FindFirst("userId")?.Value;
             if (string.IsNullOrEmpty(userId))
@@ -288,6 +288,47 @@ namespace DashboardBackend.Controllers
 
                 user.LastSeen = DateTime.Now;
                 user.IsOnline = true;
+
+                // Sayfa ve tab bilgilerini güncelle
+                if (request != null)
+                {
+                    if (!string.IsNullOrEmpty(request.CurrentPage))
+                    {
+                        user.CurrentPage = request.CurrentPage;
+                    }
+                    if (!string.IsNullOrEmpty(request.CurrentTab))
+                    {
+                        user.CurrentTab = request.CurrentTab;
+                    }
+                }
+
+                // Activity log kaydet (sayfa/tab bilgisi varsa)
+                if (request != null && (!string.IsNullOrEmpty(request.CurrentPage) || !string.IsNullOrEmpty(request.CurrentTab)))
+                {
+                    try
+                    {
+                        var activityLog = new UserActivityLog
+                        {
+                            UserId = user.Id,
+                            EventType = "time_spent",
+                            Page = request.CurrentPage,
+                            Tab = request.CurrentTab,
+                            SubTab = request.CurrentSubTab,
+                            MachineId = request.MachineId,
+                            MachineName = request.MachineName,
+                            Duration = 2, // Her heartbeat 2 saniyede bir, bu süre aktif kalma süresi
+                            Timestamp = DateTime.Now,
+                            SessionId = request.SessionId
+                        };
+                        _context.UserActivityLogs.Add(activityLog);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Activity log hatası heartbeat'i engellememeli
+                        Console.WriteLine($"Activity log error in heartbeat: {ex.Message}");
+                    }
+                }
+
                 await _context.SaveChangesAsync();
 
                 var roleSettings = await BuildRoleSettingsAsync(user.Role);
@@ -314,7 +355,9 @@ namespace DashboardBackend.Controllers
                     assignedMachineTable = user.AssignedMachineTable,
                     assignedMachineName = user.AssignedMachineName,
                     isDemo = user.IsDemo,
-                    privacySettings = user.PrivacySettings
+                    privacySettings = user.PrivacySettings,
+                    currentPage = user.CurrentPage,
+                    currentTab = user.CurrentTab
                 });
             }
 
@@ -406,7 +449,9 @@ namespace DashboardBackend.Controllers
                 colorSettings = u.ColorSettings,
                 assignedMachineId = u.AssignedMachineId,
                 assignedMachineTable = u.AssignedMachineTable,
-                assignedMachineName = u.AssignedMachineName
+                assignedMachineName = u.AssignedMachineName,
+                currentPage = u.CurrentPage,
+                currentTab = u.CurrentTab
             });
 
             return Ok(result);
@@ -584,6 +629,16 @@ namespace DashboardBackend.Controllers
         public class UpdatePasswordRequest
         {
             public string NewPassword { get; set; } = string.Empty;
+        }
+
+        public class HeartbeatRequest
+        {
+            public string? CurrentPage { get; set; }
+            public string? CurrentTab { get; set; }
+            public string? CurrentSubTab { get; set; }
+            public int? MachineId { get; set; }
+            public string? MachineName { get; set; }
+            public string? SessionId { get; set; }
         }
     }
 }

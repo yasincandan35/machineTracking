@@ -241,6 +241,20 @@
   opacity: 0.8;
 }
 
+/* Makine durum overlay */
+.machine-overlay {
+  border-radius: 8px;
+  transition: background-color 0.3s ease;
+}
+
+.machine-overlay.overlay-running {
+  background: rgba(5, 150, 105, 0.25);
+}
+
+.machine-overlay.overlay-stopped {
+  background: rgba(239, 68, 68, 0.25);
+}
+
 
 
 .status-indicator {

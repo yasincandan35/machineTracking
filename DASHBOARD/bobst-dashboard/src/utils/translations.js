@@ -14,6 +14,7 @@ export const translations = {
     maintenanceManual: 'Bakım Manuel',
     maintenanceReports: 'Bakım Raporları',
     maintenanceAdmin: 'Bakım Yönetimi',
+    operatorPerformance: 'Operatör Performansı',
     
     // Dashboard başlıkları
     dashboard: 'Dashboard',
@@ -362,6 +363,7 @@ export const translations = {
     speedInfoCard: 'Hız Bilgi Kartı',
     combinedSpeedCard: 'Kombine Hız Kartı',
     machineOverviewCard: 'Makine Özet Kartı',
+    shiftOperatorsInfoCard: 'Vardiya Operatörleri Kartı',
     lastUpdate: 'Son Güncelleme',
     mainDashboard: 'Ana Panel',
     wastageInfoCard: 'Fire Bilgi Kartı',
@@ -895,6 +897,7 @@ export const translations = {
     adminPanel: 'Admin Panel',
     database: 'Database',
     shiftManagement: 'Shift Management',
+    operatorPerformance: 'Operator Performance',
     jobPassport: 'Job Passport',
     
     // Notification messages
@@ -1030,6 +1033,7 @@ export const translations = {
     speedInfoCard: 'Speed Info Card',
     combinedSpeedCard: 'Combined Speed Card',
     machineOverviewCard: 'Machine Overview Card',
+    shiftOperatorsInfoCard: 'Shift Operators Info Card',
     lastUpdate: 'Last Update',
     mainDashboard: 'Main Dashboard',
     wastageInfoCard: 'Wastage Info Card',

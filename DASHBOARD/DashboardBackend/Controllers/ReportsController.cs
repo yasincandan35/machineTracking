@@ -163,6 +163,7 @@ namespace DashboardBackend.Controllers
                             ) AS energy_consumption_kwh,
                             total_energy_kwh_start,
                             total_energy_kwh_end,
+                            setup, qualified_bundle, defective_bundle, good_pallets, defective_pallets,
                             average_speed, run_time_seconds,
                             total_wastage_package, total_wastage_meters,
                             wastage_after_quality_control,
@@ -178,6 +179,7 @@ namespace DashboardBackend.Controllers
                             paper_consumption, actual_production, remaining_work, wastage_before_die, wastage_after_die,
                             wastage_ratio, total_stoppage_duration, over_production, completion_percentage,
                             energy_consumption_kwh,
+                            setup, qualified_bundle, defective_bundle, good_pallets, defective_pallets,
                             average_speed, run_time_seconds,
                             total_wastage_package, total_wastage_meters,
                             wastage_after_quality_control,
@@ -228,6 +230,11 @@ namespace DashboardBackend.Controllers
                         energyConsumptionKwh = reader["energy_consumption_kwh"],
                         totalEnergyKwhStart = hasEnergyTotals ? reader["total_energy_kwh_start"] : null,
                         totalEnergyKwhEnd = hasEnergyTotals ? reader["total_energy_kwh_end"] : null,
+                        setup = reader["setup"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["setup"]),
+                        qualifiedBundle = reader["qualified_bundle"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["qualified_bundle"]),
+                        defectiveBundle = reader["defective_bundle"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["defective_bundle"]),
+                        goodPallets = reader["good_pallets"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["good_pallets"]),
+                        defectivePallets = reader["defective_pallets"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["defective_pallets"]),
                         averageSpeed = reader["average_speed"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["average_speed"]),
                         runTimeSeconds = reader["run_time_seconds"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["run_time_seconds"]),
                         totalWastagePackage = reader["total_wastage_package"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["total_wastage_package"]),
@@ -301,6 +308,12 @@ namespace DashboardBackend.Controllers
                             ) AS energy_consumption_kwh,
                             total_energy_kwh_start,
                             total_energy_kwh_end,
+                            setup, qualified_bundle, defective_bundle, good_pallets, defective_pallets,
+                            average_speed, run_time_seconds,
+                            total_wastage_package, total_wastage_meters,
+                            wastage_after_quality_control,
+                            wastage_after_quality_control_updated_by,
+                            wastage_after_quality_control_updated_at,
                             job_start_time, job_end_time, created_at
                         FROM JobEndReports 
                         WHERE id = @id"
@@ -310,7 +323,14 @@ namespace DashboardBackend.Controllers
                             bundle, silindir_cevresi, hedef_hiz, ethyl_alcohol_consumption, ethyl_acetate_consumption,
                             paper_consumption, actual_production, remaining_work, wastage_before_die, wastage_after_die,
                             wastage_ratio, total_stoppage_duration, over_production, completion_percentage,
-                            energy_consumption_kwh, job_start_time, job_end_time, created_at
+                            energy_consumption_kwh,
+                            setup, qualified_bundle, defective_bundle, good_pallets, defective_pallets,
+                            average_speed, run_time_seconds,
+                            total_wastage_package, total_wastage_meters,
+                            wastage_after_quality_control,
+                            wastage_after_quality_control_updated_by,
+                            wastage_after_quality_control_updated_at,
+                            job_start_time, job_end_time, created_at
                         FROM JobEndReports 
                         WHERE id = @id";
 
@@ -354,6 +374,18 @@ namespace DashboardBackend.Controllers
                         energyConsumptionKwh = reader["energy_consumption_kwh"],
                         totalEnergyKwhStart = hasEnergyTotals ? reader["total_energy_kwh_start"] : null,
                         totalEnergyKwhEnd = hasEnergyTotals ? reader["total_energy_kwh_end"] : null,
+                        setup = reader["setup"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["setup"]),
+                        qualifiedBundle = reader["qualified_bundle"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["qualified_bundle"]),
+                        defectiveBundle = reader["defective_bundle"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["defective_bundle"]),
+                        goodPallets = reader["good_pallets"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["good_pallets"]),
+                        defectivePallets = reader["defective_pallets"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["defective_pallets"]),
+                        averageSpeed = reader["average_speed"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["average_speed"]),
+                        runTimeSeconds = reader["run_time_seconds"] == DBNull.Value ? (int?)null : Convert.ToInt32(reader["run_time_seconds"]),
+                        totalWastagePackage = reader["total_wastage_package"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["total_wastage_package"]),
+                        totalWastageMeters = reader["total_wastage_meters"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["total_wastage_meters"]),
+                        wastageAfterQualityControl = reader["wastage_after_quality_control"] == DBNull.Value ? (decimal?)null : Convert.ToDecimal(reader["wastage_after_quality_control"]),
+                        wastageAfterQualityControlUpdatedBy = reader["wastage_after_quality_control_updated_by"] == DBNull.Value ? null : reader["wastage_after_quality_control_updated_by"]?.ToString(),
+                        wastageAfterQualityControlUpdatedAt = reader["wastage_after_quality_control_updated_at"] == DBNull.Value ? (DateTime?)null : Convert.ToDateTime(reader["wastage_after_quality_control_updated_at"]),
                         jobStartTime = reader["job_start_time"],
                         jobEndTime = reader["job_end_time"],
                         createdAt = reader["created_at"]

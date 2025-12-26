@@ -17,7 +17,7 @@ const SENSOR_API_URL = isProduction
 // 🆕 DashboardAPI - Kullanıcı, Makina Listesi, Auth
 export const dashboardApi = axios.create({
   baseURL: DASHBOARD_API_URL,
-  timeout: 10000, // 10 saniye timeout
+  timeout: 60000, // 60 saniye timeout (fotoğraf yükleme için)
   headers: {
     "Content-Type": "application/json",
   },

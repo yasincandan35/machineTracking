@@ -22,6 +22,7 @@ import ActualProductionInfoCard from './Cards/Infos/ActualProductionInfoCard';
 import RemainingWorkInfoCard from './Cards/Infos/RemainingWorkInfoCard';
 import EstimatedTimeInfoCard from './Cards/Infos/EstimatedTimeInfoCard';
 import RobotPalletizingInfoCard from './Cards/Infos/RobotPalletizingInfoCard';
+import ShiftOperatorsInfoCard from './Cards/Infos/ShiftOperatorsInfoCard';
 import OEEGauge from './Cards/OEEGauge';
 import StoppageChart from './Cards/StoppageChart';
 import PeriodicSummaryCard from './Cards/PeriodicSummaryCard';
@@ -215,6 +216,7 @@ export default function GridSystem({
       style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} 
       currentLanguage={currentLanguage} 
     />,
+    shiftOperatorsInfo: () => <ShiftOperatorsInfoCard style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} selectedMachine={selectedMachine} />,
     oeeGauge: () => <OEEGauge darkMode={darkMode} colorSettings={colorSettings} liveData={liveData} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} />,
     stoppageChart: () => <StoppageChart isDark={darkMode} style={darkMode ? {} : { backgroundColor: colorSettings.infoCard, color: colorSettings.text }} currentLanguage={currentLanguage} selectedMachine={selectedMachine} />,
     
